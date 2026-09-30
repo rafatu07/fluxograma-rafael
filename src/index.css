@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --color-ink: #163b5c;
+  --color-paper: #f6f9fc;
+  --color-line: #d9e2ec;
+  --color-line-active: #163b5c;
+  --color-muted: #52657a;
+  --color-gold: #d9a441;
+  --color-gold-soft: #f3c969;
+  --color-azure: #2563eb;
+  --color-sky: #60a5fa;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f6f9fc;
+  color: #0f172a;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+.grid-texture {
+  background-image:
+    linear-gradient(to right, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(37, 99, 235, 0.08) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.flow-line {
+  background: rgba(37, 99, 235, 0.32);
+}
+
+.flow-line[data-active="true"] {
+  background: #163b5c;
+}
+
+.area-column[data-lit="true"] .flow-line[data-active="true"],
+.area-column[data-lit="true"] .rail-line {
+  background: var(--area);
+}
+
+.area-column[data-lit="true"] .flow-line[data-active="true"]::after {
+  background: var(--area);
+}
+
+.flow-line::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 2px rgba(217, 164, 65, 0.55);
+}
+
+.origin-aura {
+  position: absolute;
+  inset: -22px;
+  z-index: -1;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(37, 99, 235, 0.16), transparent 68%),
+    radial-gradient(circle at 14% 18%, rgba(217, 164, 65, 0.9) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 86% 24%, rgba(96, 165, 250, 0.95) 0 1.5px, transparent 2.2px),
+    radial-gradient(circle at 18% 82%, rgba(96, 165, 250, 0.8) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 84% 78%, rgba(217, 164, 65, 0.85) 0 1.5px, transparent 2px);
+  animation: aura 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.status-dot {
+  animation: status-pulse 2.6s ease-in-out infinite;
+}
+
+.flow-line[data-orientation="vertical"]::after {
+  left: 50%;
+  translate: -50% 0;
+  animation: flow-y 4.8s linear infinite;
+}
+
+.flow-line[data-orientation="horizontal"]::after {
+  top: 50%;
+  translate: 0 -50%;
+  animation: flow-x 6.4s linear infinite;
+}
+
+.enter {
+  animation: enter 0.48s ease both;
+}
+
+@keyframes flow-y {
+  from {
+    top: -4px;
+  }
+  to {
+    top: calc(100% + 4px);
+  }
+}
+
+@keyframes flow-x {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 5px);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aura {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter {
+    animation: none;
+  }
+
+  .flow-line::after,
+  .flow-line[data-orientation="vertical"]::after,
+  .flow-line[data-orientation="horizontal"]::after {
+    animation: none !important;
+    opacity: 0;
+  }
+
+  .project-card,
+  .project-card * {
+    transition: none;
+  }
+
+  .origin-aura,
+  .status-dot {
+    animation: none;
+  }
+}
