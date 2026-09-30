@@ -1,26 +1,21 @@
 import { accentFor } from "../data/accents.ts";
-import {
-  countProjects,
-  projectWord,
-  type Department,
-} from "../data/organization.ts";
+import { projectWord, type MapUnit } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { iconMap } from "./icons.tsx";
 
 type DepartmentNodeProps = {
-  department: Department;
+  unit: MapUnit;
   active?: boolean;
   onHover?: (active: boolean) => void;
 };
 
 export function DepartmentNode({
-  department,
+  unit,
   active = false,
   onHover,
 }: DepartmentNodeProps) {
-  const Icon = iconMap[department.icon];
-  const total = countProjects(department);
-  const accent = accentFor(department.id);
+  const Icon = iconMap[unit.icon];
+  const accent = accentFor(unit.id);
 
   return (
     <article
@@ -47,10 +42,10 @@ export function DepartmentNode({
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase text-balance">
-        {department.name}
+        {unit.name}
       </h2>
       <p className="mt-1 text-xs text-muted">
-        {total} {projectWord(total)}
+        {unit.projectCount} {projectWord(unit.projectCount)}
       </p>
     </article>
   );

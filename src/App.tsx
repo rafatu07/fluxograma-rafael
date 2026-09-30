@@ -24,8 +24,8 @@ export default function App() {
     [status, areaId],
   );
   const stats = useMemo(
-    () => computeStats(visibleDepartments),
-    [visibleDepartments],
+    () => computeStats(visibleDepartments, areaId),
+    [visibleDepartments, areaId],
   );
 
   return (
@@ -45,6 +45,7 @@ export default function App() {
           <OrganizationMap
             key={`${status}-${areaId}`}
             departments={visibleDepartments}
+            areaId={areaId}
             onSelect={setSelection}
           />
         </main>

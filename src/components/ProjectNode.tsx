@@ -43,7 +43,7 @@ export function ProjectNode({
   return (
     <article
       className={cn(
-        "project-card group relative w-full rounded-2xl border bg-white/92 py-4 pr-4 pl-5 text-left shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-1 hover:shadow-md",
+        "project-card group relative flex h-full min-h-[280px] w-full flex-col rounded-2xl border bg-white/92 py-4 pr-4 pl-5 text-left shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-1 hover:shadow-md",
         highlighted ? "shadow-md" : "border-line hover:border-sky",
       )}
       style={highlighted ? { borderColor: accent } : undefined}
@@ -61,7 +61,7 @@ export function ProjectNode({
         type="button"
         onClick={onOpen}
         aria-label={`Ver detalhes de ${project.name}`}
-        className="w-full rounded-lg text-left"
+        className="w-full flex-1 rounded-lg text-left"
       >
         <span
           className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg transition duration-200 group-hover:-translate-y-0.5 group-hover:scale-105"
@@ -82,7 +82,7 @@ export function ProjectNode({
         <span className="mt-2 block">
           <StatusBadge status={project.status} />
         </span>
-        <span className="mt-2 line-clamp-3 block text-sm leading-5 text-muted">
+        <span className="mt-2 block text-sm leading-5 text-muted">
           {project.description}
         </span>
       </button>
@@ -91,7 +91,7 @@ export function ProjectNode({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Abrir sistema ${project.name} em nova aba`}
-        className="group/link mt-3 inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4d75] hover:shadow-md"
+        className="group/link mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#1d4d75] hover:shadow-md"
       >
         Abrir sistema
         <span

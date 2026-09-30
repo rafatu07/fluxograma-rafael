@@ -1,4 +1,8 @@
-import type { Department, StatusFilter } from "../data/organization.ts";
+import {
+  areaFilterOptions,
+  type Department,
+  type StatusFilter,
+} from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 
 type FiltersProps = {
@@ -61,9 +65,9 @@ export function Filters({
           className="w-full rounded-xl border border-line bg-white/90 px-3 py-2 text-sm text-slate-800 shadow-sm"
         >
           <option value="todas">Todas as áreas</option>
-          {departments.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.name}
+          {areaFilterOptions(departments).map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name}
             </option>
           ))}
         </select>
