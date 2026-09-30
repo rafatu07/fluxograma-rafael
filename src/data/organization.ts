@@ -213,48 +213,13 @@ export function countProjects(department: Department) {
   }, 0);
 }
 
-function findTesouraria(department: Department) {
-  return department.children.find(
-    (child): child is Sector => isSector(child) && child.id === "tesouraria",
-  );
-}
-
-export function listMapUnits(source: Department[], areaId = "todas"): MapUnit[] {
-  const units: MapUnit[] = [];
-  let tesouraria: MapUnit | null = null;
-
-  for (const department of source) {
-    const sector = findTesouraria(department);
-
-    if (areaId === "tesouraria" && sector) {
-      tesouraria = {
-        id: sector.id,
-        name: sector.name,
-        icon: sector.icon,
-        projectCount: sector.projects.length,
-      };
-      continue;
-    }
-
-    units.push({
-      id: department.id,
-      name: department.name,
-      icon: department.icon,
-      projectCount: countProjects(department),
-    });
-
-    if (sector && sector.projects.length > 0) {
-      tesouraria = {
-        id: sector.id,
-        name: sector.name,
-        icon: sector.icon,
-        projectCount: sector.projects.length,
-      };
-    }
-  }
-
-  if (tesouraria) units.push(tesouraria);
-  return units;
+export function listMapUnits(source: Department[]): MapUnit[] {
+  return source.map((department) => ({
+    id: department.id,
+    name: department.name,
+    icon: department.icon,
+    projectCount: countProjects(department),
+  }));
 }
 
 export function listVisibleProjects(source: Department[]): VisibleProject[] {
@@ -293,13 +258,10 @@ export function listVisibleProjects(source: Department[]): VisibleProject[] {
 }
 
 export function areaFilterOptions(source: Department[]) {
-  const options = source.map((department) => ({
+  return source.map((department) => ({
     id: department.id,
     name: department.name,
   }));
-  const hasTesouraria = source.some((department) => findTesouraria(department));
-  if (hasTesouraria) options.push({ id: "tesouraria", name: "Tesouraria" });
-  return options;
 }
 
 export function projectWord(count: number) {
@@ -312,22 +274,10 @@ export function filterOrganization(
   areaId: string,
 ): Department[] {
   return source
-    .filter((department) => {
-      if (areaId === "todas") return true;
-      if (areaId === "tesouraria") {
-        return department.id === "administracao-financeira";
-      }
-      return department.id === areaId;
-    })
+    .filter((department) => areaId === "todas" || department.id === areaId)
     .map((department) => ({
       ...department,
       children: department.children.flatMap((child): OrgChild[] => {
-        if (
-          areaId === "tesouraria" &&
-          !(isSector(child) && child.id === "tesouraria")
-        ) {
-          return [];
-        }
         if (isSector(child)) {
           const projects = child.projects.filter((project) =>
             matchesStatus(project.status, status),
@@ -341,10 +291,7 @@ export function filterOrganization(
     .filter((department) => department.children.length > 0);
 }
 
-export function computeStats(
-  source: Department[],
-  areaId = "todas",
-): OrganizationStats {
+export function computeStats(source: Department[]): OrganizationStats {
   const projects = source.flatMap((department) =>
     department.children.flatMap((child) =>
       isSector(child) ? child.projects : [child],
@@ -358,6 +305,6 @@ export function computeStats(
     inProgress: projects.filter(
       (project) => project.status === "em-desenvolvimento",
     ).length,
-    areas: listMapUnits(source, areaId).length,
+    areas: source.length,
   };
 }

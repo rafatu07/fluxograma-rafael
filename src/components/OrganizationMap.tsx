@@ -17,7 +17,6 @@ import { ProjectNode } from "./ProjectNode.tsx";
 
 type OrganizationMapProps = {
   departments: Department[];
-  areaId: string;
   onSelect: (selection: ProjectContext) => void;
 };
 
@@ -52,18 +51,13 @@ function focusedUnitId(
   highlight: FlowHighlight | null,
   areaFocus: string | null,
 ) {
-  if (highlight?.sectorId === "tesouraria") return "tesouraria";
   return highlight?.departmentId ?? areaFocus ?? undefined;
 }
 
-export function OrganizationMap({
-  departments,
-  areaId,
-  onSelect,
-}: OrganizationMapProps) {
+export function OrganizationMap({ departments, onSelect }: OrganizationMapProps) {
   const [highlight, setHighlight] = useState<FlowHighlight | null>(null);
   const [areaFocus, setAreaFocus] = useState<string | null>(null);
-  const units = listMapUnits(departments, areaId);
+  const units = listMapUnits(departments);
   const projects = listVisibleProjects(departments);
   const focusId = focusedUnitId(highlight, areaFocus);
   const columns = useColumns(units.length);
@@ -132,7 +126,7 @@ export function OrganizationMap({
                   >
                     {showBar ? <Connector active={focusId === unit.id} /> : null}
                     <div
-                      className="enter w-full"
+                      className="enter flex w-full flex-1 flex-col"
                       style={{ animationDelay: `${200 + (rowIndex * columns + index) * 70}ms` }}
                     >
                       <DepartmentNode
@@ -206,10 +200,7 @@ function ProjectCard({
 }) {
   const accentKey =
     entry.sectorId === "tesouraria" ? entry.sectorId : entry.departmentId;
-  const linked =
-    areaFocus === "tesouraria"
-      ? entry.sectorId === "tesouraria"
-      : areaFocus === entry.departmentId;
+  const linked = areaFocus === entry.departmentId;
 
   return (
     <ProjectNode

@@ -32,6 +32,7 @@ export function ProjectNode({
   const Icon = iconMap[project.icon];
   const accent = accentFor(accentKey ?? departmentId);
   const highlighted = active || linked;
+  const areaLabel = departmentName.replace(/^Departamento de /, "");
 
   const clearHighlight = (event: FocusEvent<HTMLElement>) => {
     const next = event.relatedTarget;
@@ -64,6 +65,18 @@ export function ProjectNode({
         className="w-full flex-1 rounded-lg text-left"
       >
         <span
+          className="mb-3 inline-flex max-w-full flex-col items-start rounded-xl px-2.5 py-1 text-[11px] leading-4 font-semibold tracking-wide"
+          style={{
+            color: accent,
+            backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`,
+          }}
+        >
+          <span>{areaLabel}</span>
+          {sectorName ? (
+            <span className="font-medium tracking-normal">Subárea: {sectorName}</span>
+          ) : null}
+        </span>
+        <span
           className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg transition duration-200 group-hover:-translate-y-0.5 group-hover:scale-105"
           style={{
             color: accent,
@@ -75,10 +88,6 @@ export function ProjectNode({
         <span className="block text-sm font-semibold text-slate-900 text-balance">
           {project.name}
         </span>
-        <span className="mt-1 block text-xs text-muted">Área: {departmentName}</span>
-        {sectorName ? (
-          <span className="mt-0.5 block text-xs text-muted">Subárea: {sectorName}</span>
-        ) : null}
         <span className="mt-2 block">
           <StatusBadge status={project.status} />
         </span>

@@ -20,7 +20,7 @@ export function DepartmentNode({
   return (
     <article
       className={cn(
-        "w-full rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "flex h-full min-h-full w-full flex-1 flex-col rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
         active ? "shadow-md" : "border-line",
       )}
       style={active ? { borderColor: accent } : undefined}
@@ -44,7 +44,7 @@ export function DepartmentNode({
       <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase text-balance">
         {unit.name}
       </h2>
-      <p className="mt-1 text-xs text-muted">
+      <p className="mt-auto pt-1 text-xs text-muted">
         {unit.projectCount} {projectWord(unit.projectCount)}
       </p>
     </article>

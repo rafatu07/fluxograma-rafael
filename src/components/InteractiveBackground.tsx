@@ -76,24 +76,6 @@ export function InteractiveBackground() {
     const draw = (now: number) => {
       context.clearRect(0, 0, width, height);
 
-      if (!reduced && mouse.active) {
-        const glow = context.createRadialGradient(
-          mouse.x,
-          mouse.y,
-          0,
-          mouse.x,
-          mouse.y,
-          mouseRadius,
-        );
-        glow.addColorStop(0, "rgba(37, 99, 235, 0.075)");
-        glow.addColorStop(0.5, "rgba(217, 164, 65, 0.03)");
-        glow.addColorStop(1, "rgba(37, 99, 235, 0)");
-        context.fillStyle = glow;
-        context.beginPath();
-        context.arc(mouse.x, mouse.y, mouseRadius, 0, Math.PI * 2);
-        context.fill();
-      }
-
       const points = particles.map((particle) => {
         let x = particle.x;
         let y = particle.y;
