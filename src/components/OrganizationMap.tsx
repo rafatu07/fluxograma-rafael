@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type MouseEvent as ReactMouseEvent,
+  type RefObject,
 } from "react";
 import { accentFor } from "../data/accents.ts";
 import {
@@ -18,7 +20,6 @@ import {
   type Sector,
 } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
-import { FlowLine } from "./Connector.tsx";
 import { DepartmentNode, OfficerList } from "./DepartmentNode.tsx";
 import { MunicipalityBrand } from "./MunicipalityBrand.tsx";
 import { ProjectNode } from "./ProjectNode.tsx";
@@ -105,42 +106,125 @@ function useCanvasPan(resetKey: string) {
   };
 }
 
-function BusCap({
-  index,
-  total,
-  dropActive,
-  leftActive,
-  rightActive,
-}: {
-  index: number;
-  total: number;
-  dropActive: boolean;
-  leftActive: boolean;
-  rightActive: boolean;
-}) {
-  return (
-    <div className="relative h-8 w-full">
-      {total > 1 && index > 0 ? (
-        <FlowLine
-          orientation="horizontal"
-          active={leftActive}
-          className="absolute top-0 left-0 h-0.5 w-1/2"
-        />
-      ) : null}
-      {total > 1 && index < total - 1 ? (
-        <FlowLine
-          orientation="horizontal"
-          active={rightActive}
-          className="absolute top-0 right-0 h-0.5 w-1/2"
-        />
-      ) : null}
-      <FlowLine
-        orientation="vertical"
-        active={dropActive}
-        className="absolute top-0 left-1/2 h-8 w-0.5 -translate-x-1/2"
-      />
-    </div>
-  );
+const IDLE_STROKE = "rgba(37, 99, 235, 0.32)";
+const ACTIVE_STROKE = "#163b5c";
+
+type FlowSegment = {
+  key: string;
+  d: string;
+  active: boolean;
+};
+
+type AnchorBox = {
+  id: string;
+  parent: string | null;
+  department: string;
+  sector: string;
+  cx: number;
+  top: number;
+  bottom: number;
+};
+
+function segment(x1: number, y1: number, x2: number, y2: number) {
+  return `M ${x1} ${y1} L ${x2} ${y2}`;
+}
+
+function useConnectors(
+  stageRef: RefObject<HTMLDivElement | null>,
+  resetKey: string,
+  highlight: FlowHighlight | null,
+  areaFocus: string | null,
+) {
+  const [segments, setSegments] = useState<FlowSegment[]>([]);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const onPath = (box: AnchorBox) => {
+      if (areaFocus && !highlight) return box.department === areaFocus || box.id === areaFocus;
+      if (!highlight) return false;
+      if (box.id === highlight.departmentId) return true;
+      if (box.id === highlight.projectId) return true;
+      if (highlight.sectorId && box.id === `${highlight.departmentId}:${highlight.sectorId}`) {
+        return true;
+      }
+      return false;
+    };
+
+    const measure = () => {
+      const stageRect = stage.getBoundingClientRect();
+      const boxes = [...stage.querySelectorAll<HTMLElement>("[data-flow-id]")].map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          id: node.dataset.flowId ?? "",
+          parent: node.dataset.flowParent || null,
+          department: node.dataset.flowDepartment ?? "",
+          sector: node.dataset.flowSector ?? "",
+          cx: rect.left - stageRect.left + rect.width / 2,
+          top: rect.top - stageRect.top,
+          bottom: rect.bottom - stageRect.top,
+        } satisfies AnchorBox;
+      });
+      const byParent = new Map<string, AnchorBox[]>();
+      for (const box of boxes) {
+        if (!box.parent) continue;
+        const group = byParent.get(box.parent) ?? [];
+        group.push(box);
+        byParent.set(box.parent, group);
+      }
+
+      const next: FlowSegment[] = [];
+      for (const [parentId, children] of byParent) {
+        const parent = boxes.find((box) => box.id === parentId);
+        if (!parent || children.length === 0) continue;
+        const ordered = [...children].sort((a, b) => a.cx - b.cx);
+        const childTop = Math.min(...ordered.map((child) => child.top));
+        if (childTop <= parent.bottom) continue;
+        const busY = (parent.bottom + childTop) / 2;
+        const left = Math.min(parent.cx, ordered[0].cx);
+        const right = Math.max(parent.cx, ordered[ordered.length - 1].cx);
+        const active = ordered.some(onPath);
+
+        next.push({
+          key: `${parentId}-stem`,
+          d: segment(parent.cx, parent.bottom, parent.cx, busY),
+          active,
+        });
+        if (right - left > 0.5) {
+          next.push({
+            key: `${parentId}-bus`,
+            d: segment(left, busY, right, busY),
+            active,
+          });
+        }
+        for (const child of ordered) {
+          next.push({
+            key: `${child.id}-drop`,
+            d: segment(child.cx, busY, child.cx, child.top),
+            active: onPath(child),
+          });
+        }
+      }
+      setSegments(next);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    for (const anchor of stage.querySelectorAll<HTMLElement>("[data-flow-id]")) {
+      observer.observe(anchor);
+    }
+    stage.addEventListener("animationend", measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      stage.removeEventListener("animationend", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [stageRef, resetKey, highlight, areaFocus]);
+
+  return segments;
 }
 
 export function OrganizationMap({ departments, onSelect }: OrganizationMapProps) {
@@ -149,6 +233,7 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
   const focusId = highlight?.departmentId ?? areaFocus ?? undefined;
   const resetKey = departments.map((department) => department.id).join("-");
   const pan = useCanvasPan(resetKey);
+  const segments = useConnectors(pan.stageRef, resetKey, highlight, areaFocus);
 
   if (departments.length === 0) {
     return (
@@ -183,20 +268,28 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
           className="absolute top-0 left-0 w-max px-10 pt-8 pb-10"
           style={{ transform: `translate(${pan.offset.x}px, ${pan.offset.y}px)` }}
         >
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            aria-hidden="true"
+          >
+            {segments.map((line) => (
+              <path
+                key={line.key}
+                d={line.d}
+                fill="none"
+                stroke={line.active ? ACTIVE_STROKE : IDLE_STROKE}
+                strokeWidth={2}
+              />
+            ))}
+          </svg>
           <div className="flex flex-col items-center">
             <RootNode active={focusId !== undefined} />
-            <FlowLine
-              orientation="vertical"
-              active={focusId !== undefined}
-              className="h-8 w-0.5"
-            />
+            <div className="h-8" aria-hidden="true" />
             <div className="flex items-start">
-              {departments.map((department, index) => (
+              {departments.map((department) => (
                 <DepartmentBranch
                   key={department.id}
                   department={department}
-                  index={index}
-                  total={departments.length}
                   focusId={focusId}
                   highlight={highlight}
                   areaFocus={areaFocus}
@@ -222,6 +315,7 @@ function RootNode({ active }: { active: boolean }) {
           "relative flex w-72 flex-col items-center gap-2 rounded-2xl border bg-white/95 px-6 py-5 text-center shadow-sm backdrop-blur-sm",
           active ? "border-ink shadow-md" : "border-line",
         )}
+        data-flow-id="secretaria"
       >
         <MunicipalityBrand size="node" />
         <p className="text-sm font-semibold tracking-[0.14em] text-ink uppercase">
@@ -236,8 +330,6 @@ function RootNode({ active }: { active: boolean }) {
 
 function DepartmentBranch({
   department,
-  index,
-  total,
   focusId,
   highlight,
   areaFocus,
@@ -246,8 +338,6 @@ function DepartmentBranch({
   onAreaFocus,
 }: {
   department: Department;
-  index: number;
-  total: number;
   focusId?: string;
   highlight: FlowHighlight | null;
   areaFocus: string | null;
@@ -255,7 +345,6 @@ function DepartmentBranch({
   onHighlight: (highlight: FlowHighlight | null) => void;
   onAreaFocus: (departmentId: string | null) => void;
 }) {
-  const ids = { current: department.id, focusId };
   const active = focusId === department.id;
   const highlightProject: HighlightHandler = (project, sectorId, hovered) => {
     onHighlight(
@@ -271,16 +360,13 @@ function DepartmentBranch({
       data-lit={areaFocus === department.id ? "true" : "false"}
       style={{ "--area": accentFor(department.id) } as CSSProperties}
     >
-      <div className="w-full">
-        <BusCap
-          index={index}
-          total={total}
-          dropActive={active}
-          leftActive={active || ids.focusId !== undefined && index > 0}
-          rightActive={active || ids.focusId !== undefined && index < total - 1}
-        />
-      </div>
-      <div className="w-64">
+      <div className="h-8 w-full" aria-hidden="true" />
+      <div
+        className="w-64"
+        data-flow-id={department.id}
+        data-flow-parent="secretaria"
+        data-flow-department={department.id}
+      >
         <DepartmentNode
           department={department}
           active={active}
@@ -289,11 +375,7 @@ function DepartmentBranch({
       </div>
       {department.children.length > 0 ? (
         <div className="mt-0 flex flex-col items-center">
-          <FlowLine
-            orientation="vertical"
-            active={active}
-            className="h-6 w-0.5"
-          />
+          <div className="h-6" aria-hidden="true" />
           <ChildRow
             childrenNodes={department.children}
             department={department}
@@ -342,33 +424,18 @@ function ChildRow({
 }) {
   return (
     <div className="flex items-start">
-      {childrenNodes.map((child, index) => {
+      {childrenNodes.map((child) => {
         const id = child.id;
         const sectorId = sector?.id ?? (isOrgChild(child) && isSector(child) ? child.id : undefined);
         const projectId = sector || !isOrgChild(child) || !isSector(child) ? child.id : undefined;
-        const active = childActive(
-          department.id,
-          undefined,
-          highlight,
-          areaFocus,
-          isOrgChild(child) && isSector(child) ? child.id : sector?.id,
-          sector || !(isOrgChild(child) && isSector(child)) ? id : undefined,
-        );
-        const leftActive = active || (index > 0 && neighborActive(childrenNodes, index - 1, department, highlight, areaFocus, sector));
-        const rightActive = active || (index < childrenNodes.length - 1 && neighborActive(childrenNodes, index + 1, department, highlight, areaFocus, sector));
+        const sectorNode = isOrgChild(child) && isSector(child);
+        const parentId = sector ? `${department.id}:${sector.id}` : department.id;
+        const anchorId = sectorNode ? `${department.id}:${child.id}` : child.id;
 
         return (
           <div key={id} className="flex w-max flex-col items-center px-2">
-            <div className="w-full">
-              <BusCap
-                index={index}
-                total={childrenNodes.length}
-                dropActive={active}
-                leftActive={leftActive}
-                rightActive={rightActive}
-              />
-            </div>
-            {isOrgChild(child) && isSector(child) ? (
+            <div className="h-8 w-full" aria-hidden="true" />
+            {sectorNode ? (
               <SectorBranch
                 sector={child}
                 department={department}
@@ -378,7 +445,13 @@ function ChildRow({
                 onHighlight={onHighlight}
               />
             ) : (
-              <div className="w-60">
+              <div
+                className="w-60"
+                data-flow-id={anchorId}
+                data-flow-parent={parentId}
+                data-flow-department={department.id}
+                data-flow-sector={sector?.id ?? ""}
+              >
                 <ProjectCard
                   project={child as Project}
                   department={department}
@@ -401,26 +474,6 @@ function ChildRow({
 
 function isOrgChild(child: OrgChild | Project): child is OrgChild {
   return "type" in child;
-}
-
-function neighborActive(
-  nodes: Array<OrgChild | Project>,
-  index: number,
-  department: Department,
-  highlight: FlowHighlight | null,
-  areaFocus: string | null,
-  sector?: Sector,
-) {
-  const child = nodes[index];
-  if (!child) return false;
-  return childActive(
-    department.id,
-    undefined,
-    highlight,
-    areaFocus,
-    isOrgChild(child) && isSector(child) ? child.id : sector?.id,
-    sector || !(isOrgChild(child) && isSector(child)) ? child.id : undefined,
-  );
 }
 
 function SectorBranch({
@@ -449,7 +502,13 @@ function SectorBranch({
 
   return (
     <div className="flex flex-col items-center">
-      <div className="w-52">
+      <div
+        className="w-52"
+        data-flow-id={`${department.id}:${sector.id}`}
+        data-flow-parent={department.id}
+        data-flow-department={department.id}
+        data-flow-sector={sector.id}
+      >
         <SectorNode
           sector={sector}
           departmentId={department.id}
@@ -457,7 +516,7 @@ function SectorBranch({
           active={active}
         />
       </div>
-      <FlowLine orientation="vertical" active={active} className="h-6 w-0.5" />
+      <div className="h-6" aria-hidden="true" />
       <ChildRow
         childrenNodes={sector.projects}
         department={department}
