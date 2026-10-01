@@ -36,12 +36,7 @@ export function ProjectModal({ selection, onClose }: ProjectModalProps) {
                 <dd className="text-slate-800">{selection.departmentName}</dd>
               </div>
               {selection.sectorName ? (
-                <div>
-                  <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                    Subárea
-                  </dt>
-                  <dd className="text-slate-800">{selection.sectorName}</dd>
-                </div>
+                <p className="text-slate-800">{selection.sectorName}</p>
               ) : null}
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase">

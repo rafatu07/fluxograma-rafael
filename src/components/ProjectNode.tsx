@@ -73,7 +73,7 @@ export function ProjectNode({
         >
           <span>{areaLabel}</span>
           {sectorName ? (
-            <span className="font-medium tracking-normal">Subárea: {sectorName}</span>
+            <span className="font-medium tracking-normal">{sectorName}</span>
           ) : null}
         </span>
         <span

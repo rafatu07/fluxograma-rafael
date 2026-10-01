@@ -38,9 +38,6 @@ export function SectorNode({
       >
         <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-muted uppercase">
-        Subárea
-      </p>
       <p className="text-sm font-semibold text-slate-800">{sector.name}</p>
     </div>
   );

@@ -35,7 +35,7 @@ export function Connector({ active = false, className }: ConnectorProps) {
     <FlowLine
       orientation="vertical"
       active={active}
-      className={cn("h-8 w-px shrink-0", className)}
+      className={cn("h-8 w-0.5 shrink-0", className)}
     />
   );
 }

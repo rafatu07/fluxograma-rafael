@@ -1,26 +1,45 @@
 import { accentFor } from "../data/accents.ts";
-import { projectWord, type MapUnit } from "../data/organization.ts";
+import {
+  countProjects,
+  projectWord,
+  type Department,
+  type Officer,
+} from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { iconMap } from "./icons.tsx";
 
 type DepartmentNodeProps = {
-  unit: MapUnit;
+  department: Department;
   active?: boolean;
   onHover?: (active: boolean) => void;
 };
 
+export function OfficerList({ officers }: { officers: readonly Officer[] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {officers.map((officer) => (
+        <div key={officer.name}>
+          <p className="text-xs font-medium text-slate-800">{officer.name}</p>
+          <p className="text-[11px] leading-4 text-muted">{officer.role}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function DepartmentNode({
-  unit,
+  department,
   active = false,
   onHover,
 }: DepartmentNodeProps) {
-  const Icon = iconMap[unit.icon];
-  const accent = accentFor(unit.id);
+  const Icon = iconMap[department.icon];
+  const accent = accentFor(department.id);
+  const total = countProjects(department);
 
   return (
     <article
       className={cn(
-        "flex h-full min-h-full w-full flex-1 flex-col rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "flex h-full w-full flex-col rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
         active ? "shadow-md" : "border-line",
       )}
       style={active ? { borderColor: accent } : undefined}
@@ -42,10 +61,11 @@ export function DepartmentNode({
         <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
       <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase text-balance">
-        {unit.name}
+        {department.name}
       </h2>
-      <p className="mt-auto pt-1 text-xs text-muted">
-        {unit.projectCount} {projectWord(unit.projectCount)}
+      <OfficerList officers={department.officers} />
+      <p className="mt-auto pt-3 text-xs text-muted">
+        {total} {projectWord(total)}
       </p>
     </article>
   );

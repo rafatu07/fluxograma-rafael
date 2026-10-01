@@ -39,12 +39,23 @@ export type DirectProject = Project & {
 
 export type OrgChild = Sector | DirectProject;
 
+export type Officer = {
+  name: string;
+  role: string;
+};
+
 export type Department = {
   id: string;
   name: string;
   icon: IconKey;
+  officers: Officer[];
   children: OrgChild[];
 };
+
+export const secretariatOfficers: Officer[] = [
+  { name: "Pedro Henrique Bianchi", role: "Secretário da Fazenda" },
+  { name: "Luis Claudio de Toledo Araujo", role: "Secretário Adjunto da Fazenda" },
+];
 
 export type ProjectContext = {
   project: Project;
@@ -75,6 +86,12 @@ export const departments: Department[] = [
     id: "administracao-financeira",
     name: "Departamento de Administração Financeira",
     icon: "wallet",
+    officers: [
+      {
+        name: "Helen Viviana de Oliveira Paschetta",
+        role: "Diretora do Departamento de Administração Financeira",
+      },
+    ],
     children: [
       {
         id: "contabilidade",
@@ -141,6 +158,12 @@ export const departments: Department[] = [
     id: "relacoes-federativas",
     name: "Departamento de Relações Federativas",
     icon: "handshake",
+    officers: [
+      {
+        name: "Kátia Cristina de Oliveira",
+        role: "Diretora do Departamento de Relações Federativas",
+      },
+    ],
     children: [
       {
         id: "gestao-recursos",
@@ -159,6 +182,7 @@ export const departments: Department[] = [
     id: "gabinete",
     name: "Gabinete da Fazenda",
     icon: "building",
+    officers: [{ name: "Fabio Augusto de Alcantara", role: "Chefe de Gabinete" }],
     children: [
       {
         id: "processos-obras",

@@ -1,69 +1,156 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { accentFor } from "../data/accents.ts";
 import {
-  listMapUnits,
-  listVisibleProjects,
+  isSector,
+  secretariatOfficers,
   type Department,
   type FlowHighlight,
-  type MapUnit,
+  type OrgChild,
+  type Project,
   type ProjectContext,
-  type VisibleProject,
+  type Sector,
 } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
-import { Connector, FlowLine } from "./Connector.tsx";
-import { DepartmentNode } from "./DepartmentNode.tsx";
+import { FlowLine } from "./Connector.tsx";
+import { DepartmentNode, OfficerList } from "./DepartmentNode.tsx";
 import { MunicipalityBrand } from "./MunicipalityBrand.tsx";
 import { ProjectNode } from "./ProjectNode.tsx";
+import { SectorNode } from "./SectorNode.tsx";
 
 type OrganizationMapProps = {
   departments: Department[];
   onSelect: (selection: ProjectContext) => void;
 };
 
-function useColumns(count: number) {
-  const [width, setWidth] = useState(() => window.innerWidth);
+type HighlightHandler = (
+  project: Project,
+  sectorId: string | undefined,
+  active: boolean,
+) => void;
+
+function useCanvasPan(resetKey: string) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{
+    x: number;
+    y: number;
+    ox: number;
+    oy: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClick = useRef(false);
+  const [offset, setOffset] = useState({ x: 0, y: 16 });
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    const viewport = viewportRef.current;
+    const stage = stageRef.current;
+    if (!viewport || !stage) return;
+    const x = (viewport.clientWidth - stage.offsetWidth) / 2;
+    setOffset({ x, y: 16 });
+  }, [resetKey]);
 
-  if (count <= 1) return 1;
-  if (width >= 1280) return Math.min(count, 4);
-  if (width >= 768) return Math.min(count, 2);
-  return 1;
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    drag.current = {
+      x: event.clientX,
+      y: event.clientY,
+      ox: offset.x,
+      oy: offset.y,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current) return;
+    const dx = event.clientX - current.x;
+    const dy = event.clientY - current.y;
+    if (!current.moved && Math.hypot(dx, dy) < 6) return;
+    current.moved = true;
+    setOffset({ x: current.ox + dx, y: current.oy + dy });
+  };
+
+  const endDrag = () => {
+    if (drag.current?.moved) suppressClick.current = true;
+    drag.current = null;
+    setDragging(false);
+  };
+
+  const onClickCapture = (event: ReactMouseEvent) => {
+    if (!suppressClick.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClick.current = false;
+  };
+
+  return {
+    viewportRef,
+    stageRef,
+    offset,
+    dragging,
+    onPointerDown,
+    onPointerMove,
+    endDrag,
+    onClickCapture,
+  };
 }
 
-function chunk<T>(items: T[], size: number) {
-  const rows: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    rows.push(items.slice(index, index + size));
-  }
-  return rows;
-}
-
-function rowHas(row: MapUnit[], id?: string) {
-  return Boolean(id && row.some((unit) => unit.id === id));
-}
-
-function focusedUnitId(
-  highlight: FlowHighlight | null,
-  areaFocus: string | null,
-) {
-  return highlight?.departmentId ?? areaFocus ?? undefined;
+function BusCap({
+  index,
+  total,
+  dropActive,
+  leftActive,
+  rightActive,
+}: {
+  index: number;
+  total: number;
+  dropActive: boolean;
+  leftActive: boolean;
+  rightActive: boolean;
+}) {
+  return (
+    <div className="relative h-8 w-full">
+      {total > 1 && index > 0 ? (
+        <FlowLine
+          orientation="horizontal"
+          active={leftActive}
+          className="absolute top-0 left-0 h-0.5 w-1/2"
+        />
+      ) : null}
+      {total > 1 && index < total - 1 ? (
+        <FlowLine
+          orientation="horizontal"
+          active={rightActive}
+          className="absolute top-0 right-0 h-0.5 w-1/2"
+        />
+      ) : null}
+      <FlowLine
+        orientation="vertical"
+        active={dropActive}
+        className="absolute top-0 left-1/2 h-8 w-0.5 -translate-x-1/2"
+      />
+    </div>
+  );
 }
 
 export function OrganizationMap({ departments, onSelect }: OrganizationMapProps) {
   const [highlight, setHighlight] = useState<FlowHighlight | null>(null);
   const [areaFocus, setAreaFocus] = useState<string | null>(null);
-  const units = listMapUnits(departments);
-  const projects = listVisibleProjects(departments);
-  const focusId = focusedUnitId(highlight, areaFocus);
-  const columns = useColumns(units.length);
-  const rows = chunk(units, columns);
+  const focusId = highlight?.departmentId ?? areaFocus ?? undefined;
+  const resetKey = departments.map((department) => department.id).join("-");
+  const pan = useCanvasPan(resetKey);
 
-  if (units.length === 0) {
+  if (departments.length === 0) {
     return (
       <p className="px-4 py-16 text-center text-sm text-muted">
         Nenhum projeto corresponde aos filtros selecionados.
@@ -72,96 +159,57 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
   }
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-[1360px] px-4 sm:px-6">
-      <section
-        aria-label="Fluxograma da Secretaria da Fazenda"
-        className="flex flex-col items-center"
+    <section
+      aria-label="Fluxograma da Secretaria da Fazenda"
+      className="mx-auto mt-8 w-full max-w-[1360px] px-4 sm:px-6"
+    >
+      <div
+        ref={pan.viewportRef}
+        className={cn(
+          "relative h-[min(70vh,760px)] overflow-hidden rounded-2xl border border-line/80 bg-white/35 touch-none",
+          pan.dragging ? "cursor-grabbing" : "cursor-grab",
+        )}
+        onPointerDown={pan.onPointerDown}
+        onPointerMove={pan.onPointerMove}
+        onPointerUp={pan.endDrag}
+        onPointerCancel={pan.endDrag}
+        onClickCapture={pan.onClickCapture}
       >
-        <RootNode active={focusId !== undefined} />
-        <Connector active={focusId !== undefined} />
-        {rows.map((row, rowIndex) => {
-          const showBar = columns > 1 && row.length > 1;
-          const stemActive = rows
-            .slice(rowIndex)
-            .some((item) => rowHas(item, focusId));
-
-          return (
-            <div
-              key={row.map((unit) => unit.id).join("-")}
-              className="flex w-full flex-col items-center"
-            >
-              {rowIndex > 0 ? (
-                <Connector active={stemActive} className="h-10" />
-              ) : null}
-              {showBar ? (
-                <div className="relative h-px w-full">
-                  <FlowLine
-                    orientation="horizontal"
-                    active={rowHas(row, focusId)}
-                    className="absolute top-0 h-px"
-                    style={{
-                      left: `${50 / row.length}%`,
-                      right: `${50 / row.length}%`,
-                    }}
-                  />
-                </div>
-              ) : null}
-              <div
-                className={cn("w-full", showBar ? "grid gap-x-5" : "flex justify-center")}
-                style={
-                  showBar
-                    ? { gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }
-                    : undefined
-                }
-              >
-                {row.map((unit, index) => (
-                  <div
-                    key={unit.id}
-                    className={cn(
-                      "area-column flex min-w-0 flex-col items-center",
-                      showBar ? "w-full" : "w-full max-w-sm",
-                    )}
-                    data-lit={areaFocus === unit.id ? "true" : "false"}
-                    style={{ "--area": accentFor(unit.id) } as CSSProperties}
-                  >
-                    {showBar ? <Connector active={focusId === unit.id} /> : null}
-                    <div
-                      className="enter flex w-full flex-1 flex-col"
-                      style={{ animationDelay: `${200 + (rowIndex * columns + index) * 70}ms` }}
-                    >
-                      <DepartmentNode
-                        unit={unit}
-                        active={focusId === unit.id}
-                        onHover={(active) => setAreaFocus(active ? unit.id : null)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <p className="pointer-events-none absolute top-3 left-3 z-10 text-[11px] text-muted">
+          Arraste para explorar
+        </p>
+        <div
+          ref={pan.stageRef}
+          className="absolute top-0 left-0 w-max px-10 pt-8 pb-10"
+          style={{ transform: `translate(${pan.offset.x}px, ${pan.offset.y}px)` }}
+        >
+          <div className="flex flex-col items-center">
+            <RootNode active={focusId !== undefined} />
+            <FlowLine
+              orientation="vertical"
+              active={focusId !== undefined}
+              className="h-8 w-0.5"
+            />
+            <div className="flex items-start">
+              {departments.map((department, index) => (
+                <DepartmentBranch
+                  key={department.id}
+                  department={department}
+                  index={index}
+                  total={departments.length}
+                  focusId={focusId}
+                  highlight={highlight}
+                  areaFocus={areaFocus}
+                  onSelect={onSelect}
+                  onHighlight={setHighlight}
+                  onAreaFocus={setAreaFocus}
+                />
+              ))}
             </div>
-          );
-        })}
-      </section>
-      {projects.length > 0 ? (
-        <section aria-label="Projetos digitais" className="mt-10">
-          <h2 className="mb-4 text-center text-sm font-semibold tracking-[0.16em] text-ink uppercase">
-            Projetos Digitais
-          </h2>
-          <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {projects.map((entry) => (
-              <ProjectCard
-                key={entry.project.id}
-                entry={entry}
-                highlight={highlight}
-                areaFocus={areaFocus}
-                onSelect={onSelect}
-                onHighlight={setHighlight}
-              />
-            ))}
           </div>
-        </section>
-      ) : null}
-    </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -171,7 +219,7 @@ function RootNode({ active }: { active: boolean }) {
       <div className="origin-aura" aria-hidden="true" />
       <div
         className={cn(
-          "relative flex flex-col items-center gap-2 rounded-2xl border bg-white/95 px-8 py-5 text-center shadow-sm backdrop-blur-sm",
+          "relative flex w-72 flex-col items-center gap-2 rounded-2xl border bg-white/95 px-6 py-5 text-center shadow-sm backdrop-blur-sm",
           active ? "border-ink shadow-md" : "border-line",
         )}
       >
@@ -179,56 +227,288 @@ function RootNode({ active }: { active: boolean }) {
         <p className="text-sm font-semibold tracking-[0.14em] text-ink uppercase">
           Secretaria da Fazenda
         </p>
+        <OfficerList officers={secretariatOfficers} />
         <p className="text-xs text-muted">Prefeitura de Taubaté</p>
       </div>
     </div>
   );
 }
 
-function ProjectCard({
-  entry,
+function DepartmentBranch({
+  department,
+  index,
+  total,
+  focusId,
+  highlight,
+  areaFocus,
+  onSelect,
+  onHighlight,
+  onAreaFocus,
+}: {
+  department: Department;
+  index: number;
+  total: number;
+  focusId?: string;
+  highlight: FlowHighlight | null;
+  areaFocus: string | null;
+  onSelect: (selection: ProjectContext) => void;
+  onHighlight: (highlight: FlowHighlight | null) => void;
+  onAreaFocus: (departmentId: string | null) => void;
+}) {
+  const ids = { current: department.id, focusId };
+  const active = focusId === department.id;
+  const highlightProject: HighlightHandler = (project, sectorId, hovered) => {
+    onHighlight(
+      hovered
+        ? { departmentId: department.id, sectorId, projectId: project.id }
+        : null,
+    );
+  };
+
+  return (
+    <div
+      className="area-column flex w-max flex-col items-center px-3"
+      data-lit={areaFocus === department.id ? "true" : "false"}
+      style={{ "--area": accentFor(department.id) } as CSSProperties}
+    >
+      <div className="w-full">
+        <BusCap
+          index={index}
+          total={total}
+          dropActive={active}
+          leftActive={active || ids.focusId !== undefined && index > 0}
+          rightActive={active || ids.focusId !== undefined && index < total - 1}
+        />
+      </div>
+      <div className="w-64">
+        <DepartmentNode
+          department={department}
+          active={active}
+          onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
+        />
+      </div>
+      {department.children.length > 0 ? (
+        <div className="mt-0 flex flex-col items-center">
+          <FlowLine
+            orientation="vertical"
+            active={active}
+            className="h-6 w-0.5"
+          />
+          <ChildRow
+            childrenNodes={department.children}
+            department={department}
+            highlight={highlight}
+            areaFocus={areaFocus}
+            onSelect={onSelect}
+            onHighlight={highlightProject}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function childActive(
+  departmentId: string,
+  focusId: string | undefined,
+  highlight: FlowHighlight | null,
+  areaFocus: string | null,
+  sectorId?: string,
+  projectId?: string,
+) {
+  if (areaFocus === departmentId && !highlight) return true;
+  if (!highlight || highlight.departmentId !== departmentId) return focusId === departmentId && !highlight && !sectorId && !projectId;
+  if (projectId) return highlight.projectId === projectId;
+  if (sectorId) return highlight.sectorId === sectorId;
+  return highlight.departmentId === departmentId;
+}
+
+function ChildRow({
+  childrenNodes,
+  department,
+  highlight,
+  areaFocus,
+  onSelect,
+  onHighlight,
+  sector,
+}: {
+  childrenNodes: OrgChild[] | Project[];
+  department: Department;
+  highlight: FlowHighlight | null;
+  areaFocus: string | null;
+  onSelect: (selection: ProjectContext) => void;
+  onHighlight: HighlightHandler;
+  sector?: Sector;
+}) {
+  return (
+    <div className="flex items-start">
+      {childrenNodes.map((child, index) => {
+        const id = child.id;
+        const sectorId = sector?.id ?? (isOrgChild(child) && isSector(child) ? child.id : undefined);
+        const projectId = sector || !isOrgChild(child) || !isSector(child) ? child.id : undefined;
+        const active = childActive(
+          department.id,
+          undefined,
+          highlight,
+          areaFocus,
+          isOrgChild(child) && isSector(child) ? child.id : sector?.id,
+          sector || !(isOrgChild(child) && isSector(child)) ? id : undefined,
+        );
+        const leftActive = active || (index > 0 && neighborActive(childrenNodes, index - 1, department, highlight, areaFocus, sector));
+        const rightActive = active || (index < childrenNodes.length - 1 && neighborActive(childrenNodes, index + 1, department, highlight, areaFocus, sector));
+
+        return (
+          <div key={id} className="flex w-max flex-col items-center px-2">
+            <div className="w-full">
+              <BusCap
+                index={index}
+                total={childrenNodes.length}
+                dropActive={active}
+                leftActive={leftActive}
+                rightActive={rightActive}
+              />
+            </div>
+            {isOrgChild(child) && isSector(child) ? (
+              <SectorBranch
+                sector={child}
+                department={department}
+                highlight={highlight}
+                areaFocus={areaFocus}
+                onSelect={onSelect}
+                onHighlight={onHighlight}
+              />
+            ) : (
+              <div className="w-60">
+                <ProjectCard
+                  project={child as Project}
+                  department={department}
+                  sector={sector}
+                  sectorId={sectorId}
+                  projectId={projectId}
+                  highlight={highlight}
+                  areaFocus={areaFocus}
+                  onSelect={onSelect}
+                  onHighlight={onHighlight}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function isOrgChild(child: OrgChild | Project): child is OrgChild {
+  return "type" in child;
+}
+
+function neighborActive(
+  nodes: Array<OrgChild | Project>,
+  index: number,
+  department: Department,
+  highlight: FlowHighlight | null,
+  areaFocus: string | null,
+  sector?: Sector,
+) {
+  const child = nodes[index];
+  if (!child) return false;
+  return childActive(
+    department.id,
+    undefined,
+    highlight,
+    areaFocus,
+    isOrgChild(child) && isSector(child) ? child.id : sector?.id,
+    sector || !(isOrgChild(child) && isSector(child)) ? child.id : undefined,
+  );
+}
+
+function SectorBranch({
+  sector,
+  department,
   highlight,
   areaFocus,
   onSelect,
   onHighlight,
 }: {
-  entry: VisibleProject;
+  sector: Sector;
+  department: Department;
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
-  onHighlight: (highlight: FlowHighlight | null) => void;
+  onHighlight: HighlightHandler;
 }) {
-  const accentKey =
-    entry.sectorId === "tesouraria" ? entry.sectorId : entry.departmentId;
-  const linked = areaFocus === entry.departmentId;
+  const accentKey = sector.id === "tesouraria" ? sector.id : department.id;
+  const active = childActive(
+    department.id,
+    undefined,
+    highlight,
+    areaFocus,
+    sector.id,
+  );
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="w-52">
+        <SectorNode
+          sector={sector}
+          departmentId={department.id}
+          accentKey={accentKey}
+          active={active}
+        />
+      </div>
+      <FlowLine orientation="vertical" active={active} className="h-6 w-0.5" />
+      <ChildRow
+        childrenNodes={sector.projects}
+        department={department}
+        highlight={highlight}
+        areaFocus={areaFocus}
+        onSelect={onSelect}
+        onHighlight={onHighlight}
+        sector={sector}
+      />
+    </div>
+  );
+}
+
+function ProjectCard({
+  project,
+  department,
+  sector,
+  highlight,
+  areaFocus,
+  onSelect,
+  onHighlight,
+}: {
+  project: Project;
+  department: Department;
+  sector?: Sector;
+  sectorId?: string;
+  projectId?: string;
+  highlight: FlowHighlight | null;
+  areaFocus: string | null;
+  onSelect: (selection: ProjectContext) => void;
+  onHighlight: HighlightHandler;
+}) {
+  const accentKey = sector?.id === "tesouraria" ? sector.id : department.id;
 
   return (
     <ProjectNode
-      project={entry.project}
-      departmentId={entry.departmentId}
+      project={project}
+      departmentId={department.id}
       accentKey={accentKey}
-      departmentName={entry.departmentName}
-      sectorName={entry.sectorName}
-      active={highlight?.projectId === entry.project.id}
-      linked={linked}
+      departmentName={department.name}
+      sectorName={sector?.name}
+      active={highlight?.projectId === project.id}
+      linked={areaFocus === department.id && !highlight}
       onOpen={() =>
         onSelect({
-          project: entry.project,
-          departmentName: entry.departmentName,
-          sectorName: entry.sectorName,
+          project,
+          departmentName: department.name,
+          sectorName: sector?.name,
         })
       }
-      onHighlight={(active) =>
-        onHighlight(
-          active
-            ? {
-                departmentId: entry.departmentId,
-                sectorId: entry.sectorId,
-                projectId: entry.project.id,
-              }
-            : null,
-        )
-      }
+      onHighlight={(active) => onHighlight(project, sector?.id, active)}
     />
   );
 }

@@ -229,7 +229,6 @@ export function InteractiveBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 z-0" aria-hidden="true">
       <div className="absolute inset-0 bg-paper" />
-      <div className="grid-texture absolute inset-0" />
       <canvas ref={canvasRef} className="absolute inset-0" />
     </div>
   );
