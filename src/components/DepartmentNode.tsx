@@ -39,7 +39,7 @@ export function DepartmentNode({
   return (
     <article
       className={cn(
-        "flex h-full w-full flex-col rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "flex w-full flex-col rounded-2xl border bg-white/92 px-4 py-4 text-center shadow-sm backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
         active ? "shadow-md" : "border-line",
       )}
       style={active ? { borderColor: accent } : undefined}
@@ -63,8 +63,11 @@ export function DepartmentNode({
       <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase text-balance">
         {department.name}
       </h2>
+      <p className="mt-1 text-xs font-semibold tracking-[0.16em] text-muted uppercase">
+        {department.sigla}
+      </p>
       <OfficerList officers={department.officers} />
-      <p className="mt-auto pt-3 text-xs text-muted">
+      <p className="mt-3 pt-0 text-xs text-muted">
         {total} {projectWord(total)}
       </p>
     </article>

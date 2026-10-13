@@ -11,6 +11,7 @@ import {
 import { Crosshair, Minus, Plus, Scan } from "lucide-react";
 import { accentFor } from "../data/accents.ts";
 import {
+  CABINET_ID,
   isSector,
   secretariatOfficers,
   type Department,
@@ -515,20 +516,25 @@ function useConnectors(
       }
 
       const next: FlowSegment[] = [];
-      for (const [parentId, children] of byParent) {
-        const parent = boxes.find((box) => box.id === parentId);
-        if (!parent || children.length === 0) continue;
+
+      const appendBus = (
+        parentId: string,
+        parent: AnchorBox,
+        children: AnchorBox[],
+        fromY: number,
+      ) => {
+        if (children.length === 0) return;
         const ordered = [...children].sort((a, b) => a.cx - b.cx);
         const childTop = Math.min(...ordered.map((child) => child.top));
-        if (childTop <= parent.bottom) continue;
-        const busY = (parent.bottom + childTop) / 2;
+        if (childTop <= fromY) return;
+        const busY = (fromY + childTop) / 2;
         const left = Math.min(parent.cx, ordered[0].cx);
         const right = Math.max(parent.cx, ordered[ordered.length - 1].cx);
         const active = ordered.some(onPath);
 
         next.push({
           key: `${parentId}-stem`,
-          d: segment(parent.cx, parent.bottom, parent.cx, busY),
+          d: segment(parent.cx, fromY, parent.cx, busY),
           active,
         });
         if (right - left > 0.5) {
@@ -545,6 +551,96 @@ function useConnectors(
             active: onPath(child),
           });
         }
+      };
+
+      for (const [parentId, children] of byParent) {
+        const parent = boxes.find((box) => box.id === parentId);
+        if (!parent || children.length === 0) continue;
+
+        if (parentId === "secretaria") {
+          const cabinetBox = children.find((child) => child.id === CABINET_ID);
+          const departments = children.filter((child) => child.id !== CABINET_ID);
+
+          if (cabinetBox && departments.length > 0 && cabinetBox.top > parent.bottom) {
+            const deptTop = Math.min(...departments.map((child) => child.top));
+            if (deptTop <= parent.bottom) continue;
+            // Braço no meio do tronco entre Secretaria e a fileira dos departamentos.
+            const armY = (parent.bottom + deptTop) / 2;
+            const cabinetActive = onPath(cabinetBox) || onPath(parent);
+            const deptActive = departments.some(onPath) || onPath(parent);
+
+            next.push({
+              key: "secretaria-stem-upper",
+              d: segment(parent.cx, parent.bottom, parent.cx, armY),
+              active: cabinetActive || deptActive,
+            });
+            next.push({
+              key: "secretaria-cabinet-arm",
+              d: segment(parent.cx, armY, cabinetBox.cx, armY),
+              active: cabinetActive,
+            });
+            next.push({
+              key: "secretaria-cabinet-drop",
+              d: segment(
+                cabinetBox.cx,
+                armY,
+                cabinetBox.cx,
+                Math.max(cabinetBox.top, armY),
+              ),
+              active: cabinetActive,
+            });
+            appendBus("secretaria-depts", parent, departments, armY);
+            continue;
+          }
+
+          if (cabinetBox) {
+            appendBus("secretaria", parent, [cabinetBox], parent.bottom);
+            continue;
+          }
+
+          appendBus("secretaria", parent, departments, parent.bottom);
+          continue;
+        }
+
+        // Projetos diretos ao lado do tronco; setores saem do mesmo tronco (padrão Gabinete).
+        const directs = children.filter((child) => !child.sector);
+        const sectorNodes = children.filter((child) => Boolean(child.sector));
+        if (directs.length > 0 && sectorNodes.length > 0) {
+          const sectorTop = Math.min(...sectorNodes.map((child) => child.top));
+          if (sectorTop > parent.bottom) {
+            const armY = (parent.bottom + sectorTop) / 2;
+            const directActive = directs.some(onPath) || onPath(parent);
+            const sectorActive = sectorNodes.some(onPath) || onPath(parent);
+
+            next.push({
+              key: `${parentId}-stem-upper`,
+              d: segment(parent.cx, parent.bottom, parent.cx, armY),
+              active: directActive || sectorActive,
+            });
+            for (const direct of [...directs].sort((a, b) => a.cx - b.cx)) {
+              const active = onPath(direct) || onPath(parent);
+              next.push({
+                key: `${direct.id}-arm`,
+                d: segment(parent.cx, armY, direct.cx, armY),
+                active,
+              });
+              next.push({
+                key: `${direct.id}-drop`,
+                d: segment(
+                  direct.cx,
+                  armY,
+                  direct.cx,
+                  Math.max(direct.top, armY),
+                ),
+                active,
+              });
+            }
+            appendBus(`${parentId}-sectors`, parent, sectorNodes, armY);
+            continue;
+          }
+        }
+
+        appendBus(parentId, parent, children, parent.bottom);
       }
       setSegments(next);
     };
@@ -574,11 +670,15 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
   const resetKey = departments.map((department) => department.id).join("-");
   const canvas = useCanvasView(resetKey);
   const segments = useConnectors(canvas.stageRef, resetKey, highlight, areaFocus);
+  const coreDepartments = departments.filter(
+    (department) => department.id !== CABINET_ID,
+  );
+  const cabinet = departments.find((department) => department.id === CABINET_ID);
 
   if (departments.length === 0) {
     return (
       <p className="px-4 py-16 text-center text-sm text-muted">
-        Nenhum projeto corresponde aos filtros selecionados.
+        Nenhuma unidade corresponde aos filtros selecionados.
       </p>
     );
   }
@@ -671,20 +771,49 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
           </svg>
           <div className="flex flex-col items-center">
             <RootNode active={focusId !== undefined} />
-            <div className="h-8" aria-hidden="true" />
             <div className="flex items-start">
-              {departments.map((department) => (
-                <DepartmentBranch
-                  key={department.id}
-                  department={department}
-                  focusId={focusId}
-                  highlight={highlight}
-                  areaFocus={areaFocus}
-                  onSelect={onSelect}
-                  onHighlight={setHighlight}
-                  onAreaFocus={setAreaFocus}
-                />
-              ))}
+              {cabinet ? (
+                <div
+                  className={cn(
+                    "flex items-start",
+                    // Alinha o topo do Gabinete ao meio do tronco (metade de h-52 ≈ pt-28).
+                    coreDepartments.length > 0 ? "mr-16 pt-28" : undefined,
+                  )}
+                >
+                  <DepartmentBranch
+                    key={cabinet.id}
+                    department={cabinet}
+                    focusId={focusId}
+                    highlight={highlight}
+                    areaFocus={areaFocus}
+                    onSelect={onSelect}
+                    onHighlight={setHighlight}
+                    onAreaFocus={setAreaFocus}
+                    omitTopSpacer
+                  />
+                </div>
+              ) : null}
+              <div className="flex flex-col items-center">
+                {coreDepartments.length > 0 && cabinet ? (
+                  <div className="h-52 shrink-0" aria-hidden="true" />
+                ) : (
+                  <div className="h-8 shrink-0" aria-hidden="true" />
+                )}
+                <div className="flex items-start">
+                  {coreDepartments.map((department) => (
+                    <DepartmentBranch
+                      key={department.id}
+                      department={department}
+                      focusId={focusId}
+                      highlight={highlight}
+                      areaFocus={areaFocus}
+                      onSelect={onSelect}
+                      onHighlight={setHighlight}
+                      onAreaFocus={setAreaFocus}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -723,6 +852,7 @@ function DepartmentBranch({
   onSelect,
   onHighlight,
   onAreaFocus,
+  omitTopSpacer = false,
 }: {
   department: Department;
   focusId?: string;
@@ -731,8 +861,11 @@ function DepartmentBranch({
   onSelect: (selection: ProjectContext) => void;
   onHighlight: (highlight: FlowHighlight | null) => void;
   onAreaFocus: (departmentId: string | null) => void;
+  omitTopSpacer?: boolean;
 }) {
   const active = focusId === department.id;
+  const directProjects = department.children.filter((child) => !isSector(child));
+  const sectors = department.children.filter(isSector);
   const highlightProject: HighlightHandler = (project, sectorId, hovered) => {
     onHighlight(
       hovered
@@ -747,7 +880,9 @@ function DepartmentBranch({
       data-lit={areaFocus === department.id ? "true" : "false"}
       style={{ "--area": accentFor(department.id) } as CSSProperties}
     >
-      <div className="h-8 w-full" aria-hidden="true" />
+      {omitTopSpacer ? null : (
+        <div className="h-8 w-full shrink-0" aria-hidden="true" />
+      )}
       <div
         className="w-64"
         data-flow-id={department.id}
@@ -760,11 +895,44 @@ function DepartmentBranch({
           onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
         />
       </div>
-      {department.children.length > 0 ? (
+      {directProjects.length > 0 && sectors.length > 0 ? (
+        <div className="flex items-start">
+          <div
+            className={cn(
+              "flex items-start",
+              // Alinha o topo do projeto ao meio do tronco (metade de h-52 ≈ pt-28).
+              "mr-16 pt-28",
+            )}
+          >
+            <ChildRow
+              childrenNodes={directProjects}
+              department={department}
+              highlight={highlight}
+              areaFocus={areaFocus}
+              onSelect={onSelect}
+              onHighlight={highlightProject}
+              omitTopSpacer
+            />
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="h-52 shrink-0" aria-hidden="true" />
+            <ChildRow
+              childrenNodes={sectors}
+              department={department}
+              highlight={highlight}
+              areaFocus={areaFocus}
+              onSelect={onSelect}
+              onHighlight={highlightProject}
+            />
+          </div>
+        </div>
+      ) : directProjects.length > 0 || sectors.length > 0 ? (
         <div className="mt-0 flex flex-col items-center">
-          <div className="h-6" aria-hidden="true" />
+          <div className="h-6 shrink-0" aria-hidden="true" />
           <ChildRow
-            childrenNodes={department.children}
+            childrenNodes={
+              directProjects.length > 0 ? directProjects : sectors
+            }
             department={department}
             highlight={highlight}
             areaFocus={areaFocus}
@@ -800,6 +968,7 @@ function ChildRow({
   onSelect,
   onHighlight,
   sector,
+  omitTopSpacer = false,
 }: {
   childrenNodes: OrgChild[] | Project[];
   department: Department;
@@ -808,6 +977,7 @@ function ChildRow({
   onSelect: (selection: ProjectContext) => void;
   onHighlight: HighlightHandler;
   sector?: Sector;
+  omitTopSpacer?: boolean;
 }) {
   return (
     <div className="flex items-start">
@@ -821,7 +991,15 @@ function ChildRow({
 
         return (
           <div key={id} className="flex w-max flex-col items-center px-2">
-            <div className="h-8 w-full" aria-hidden="true" />
+            {omitTopSpacer ? null : (
+              <div
+                className={cn(
+                  "w-full shrink-0",
+                  sectorNode ? "h-8" : "h-5",
+                )}
+                aria-hidden="true"
+              />
+            )}
             {sectorNode ? (
               <SectorBranch
                 sector={child}
@@ -833,7 +1011,7 @@ function ChildRow({
               />
             ) : (
               <div
-                className="w-60"
+                className="w-52"
                 data-flow-id={anchorId}
                 data-flow-parent={parentId}
                 data-flow-department={department.id}

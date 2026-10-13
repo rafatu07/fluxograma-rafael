@@ -47,6 +47,7 @@ export type Officer = {
 export type Department = {
   id: string;
   name: string;
+  sigla: string;
   icon: IconKey;
   officers: Officer[];
   children: OrgChild[];
@@ -81,10 +82,13 @@ export const statusLabel: Record<ProjectStatus, string> = {
   "em-desenvolvimento": "Em desenvolvimento",
 };
 
+export const CABINET_ID = "gabinete";
+
 export const departments: Department[] = [
   {
     id: "administracao-financeira",
     name: "Departamento de Administração Financeira",
+    sigla: "DAF",
     icon: "wallet",
     officers: [
       {
@@ -155,8 +159,22 @@ export const departments: Department[] = [
     ],
   },
   {
+    id: "receita-fiscalizacao",
+    name: "Departamento de Receita e Fiscalização Tributária",
+    sigla: "DRFT",
+    icon: "receipt",
+    officers: [
+      {
+        name: "Sarah Nicia Sendretti Santos",
+        role: "Diretora do Departamento de Receita e Fiscalização Tributária",
+      },
+    ],
+    children: [],
+  },
+  {
     id: "relacoes-federativas",
     name: "Departamento de Relações Federativas",
+    sigla: "DRF",
     icon: "handshake",
     officers: [
       {
@@ -179,8 +197,22 @@ export const departments: Department[] = [
     ],
   },
   {
-    id: "gabinete",
-    name: "Gabinete da Fazenda",
+    id: "planejamento-orcamento",
+    name: "Departamento de Planejamento, Orçamento e Gestão Estratégica",
+    sigla: "DPOGE",
+    icon: "chart",
+    officers: [
+      {
+        name: "Renato Motta Bicudo Guimaraes e Silva",
+        role: "Diretor do Departamento de Planejamento, Orçamento e Gestão Estratégica",
+      },
+    ],
+    children: [],
+  },
+  {
+    id: CABINET_ID,
+    name: "Gabinete da Secretaria",
+    sigla: "GSEFAZ",
     icon: "building",
     officers: [{ name: "Fabio Augusto de Alcantara", role: "Chefe de Gabinete" }],
     children: [
@@ -284,7 +316,7 @@ export function listVisibleProjects(source: Department[]): VisibleProject[] {
 export function areaFilterOptions(source: Department[]) {
   return source.map((department) => ({
     id: department.id,
-    name: department.name,
+    name: `${department.name} (${department.sigla})`,
   }));
 }
 
@@ -311,8 +343,7 @@ export function filterOrganization(
         }
         return matchesStatus(child.status, status) ? [child] : [];
       }),
-    }))
-    .filter((department) => department.children.length > 0);
+    }));
 }
 
 export function computeStats(source: Department[]): OrganizationStats {
