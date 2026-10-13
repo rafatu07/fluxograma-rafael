@@ -12,6 +12,7 @@ type ProjectNodeProps = {
   accentKey?: string;
   departmentName: string;
   sectorName?: string;
+  unitPath?: string;
   active?: boolean;
   linked?: boolean;
   onOpen: () => void;
@@ -24,6 +25,7 @@ export function ProjectNode({
   accentKey,
   departmentName,
   sectorName,
+  unitPath,
   active = false,
   linked = false,
   onOpen,
@@ -33,7 +35,7 @@ export function ProjectNode({
   const accent = accentFor(accentKey ?? departmentId);
   const highlighted = active || linked;
   const areaLabel = departmentName.replace(/^Departamento de /, "");
-  const areaLine = sectorName ? `${areaLabel} · ${sectorName}` : areaLabel;
+  const areaLine = [areaLabel, sectorName, unitPath].filter(Boolean).join(" · ");
 
   const clearHighlight = (event: FocusEvent<HTMLElement>) => {
     const next = event.relatedTarget;

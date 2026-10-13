@@ -35,8 +35,17 @@ export function ProjectModal({ selection, onClose }: ProjectModalProps) {
                 </dt>
                 <dd className="text-slate-800">{selection.departmentName}</dd>
               </div>
-              {selection.sectorName ? (
-                <p className="text-slate-800">{selection.sectorName}</p>
+              {selection.sectorName || selection.unitPath ? (
+                <div>
+                  <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                    Unidade
+                  </dt>
+                  <dd className="text-slate-800">
+                    {[selection.sectorName, selection.unitPath]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </dd>
+                </div>
               ) : null}
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase">

@@ -25,19 +25,26 @@ export type Project = {
   highlights?: readonly string[];
 };
 
-export type Sector = {
+export type OrgUnitType = "sector" | "division" | "supervision";
+
+export type OrgUnit = {
   id: string;
   name: string;
-  type: "sector";
+  type: OrgUnitType;
   icon: IconKey;
-  projects: Project[];
+  children: OrgUnitChild[];
 };
+
+/** @deprecated Use OrgUnit with type "sector" */
+export type Sector = OrgUnit;
 
 export type DirectProject = Project & {
   type: "project";
 };
 
-export type OrgChild = Sector | DirectProject;
+export type OrgUnitChild = OrgUnit | DirectProject;
+
+export type OrgChild = OrgUnit | DirectProject;
 
 export type Officer = {
   name: string;
@@ -62,11 +69,13 @@ export type ProjectContext = {
   project: Project;
   departmentName: string;
   sectorName?: string;
+  unitPath?: string;
 };
 
 export type FlowHighlight = {
   departmentId: string;
   sectorId?: string;
+  unitFlowId?: string;
   projectId: string;
 };
 
@@ -102,15 +111,54 @@ export const departments: Department[] = [
         name: "Contabilidade",
         type: "sector",
         icon: "calculator",
-        projects: [
+        children: [
           {
-            id: "controle-aluguel",
-            name: "Controle de Processos de Aluguel",
-            status: "concluido",
-            url: "https://controle-aluguel-fran.vercel.app/",
-            description:
-              "Sistema desenvolvido para apoiar a Contabilidade no controle e acompanhamento dos processos relacionados a aluguéis.",
+            id: "divisao-contabilidade",
+            name: "Divisão de Contabilidade",
+            type: "division",
+            icon: "calculator",
+            children: [
+              {
+                id: "supervisao-empenho",
+                name: "Supervisão de Empenho",
+                type: "supervision",
+                icon: "clipboard",
+                children: [],
+              },
+            ],
+          },
+          {
+            id: "divisao-calculos-terceiro-setor",
+            name: "Divisão de Cálculos e Terceiro Setor",
+            type: "division",
+            icon: "calculator",
+            children: [
+              {
+                id: "supervisao-calculos-administrativos-judiciais",
+                name: "Supervisão de Cálculos Administrativos e Judiciais",
+                type: "supervision",
+                icon: "clipboard",
+                children: [],
+              },
+            ],
+          },
+          {
+            id: "divisao-liquidacao-pagamento",
+            name: "Divisão de Liquidação e Pagamento",
+            type: "division",
             icon: "receipt",
+            children: [
+              {
+                id: "controle-aluguel",
+                name: "Controle de Processos de Aluguel",
+                type: "project",
+                status: "concluido",
+                url: "https://controle-aluguel-fran.vercel.app/",
+                description:
+                  "Sistema desenvolvido para apoiar a Contabilidade no controle e acompanhamento dos processos relacionados a aluguéis.",
+                icon: "receipt",
+              },
+            ],
           },
         ],
       },
@@ -119,10 +167,41 @@ export const departments: Department[] = [
         name: "Tesouraria",
         type: "sector",
         icon: "landmark",
-        projects: [
+        children: [
+          {
+            id: "divisao-conciliacao-bancaria",
+            name: "Divisão de Conciliação Bancária",
+            type: "division",
+            icon: "banknote",
+            children: [
+              {
+                id: "supervisao-conciliacao-bancaria",
+                name: "Supervisão de Conciliação Bancária",
+                type: "supervision",
+                icon: "clipboard",
+                children: [],
+              },
+            ],
+          },
+          {
+            id: "divisao-tesouraria",
+            name: "Divisão de Tesouraria",
+            type: "division",
+            icon: "landmark",
+            children: [
+              {
+                id: "supervisao-tesouraria",
+                name: "Supervisão de Tesouraria",
+                type: "supervision",
+                icon: "clipboard",
+                children: [],
+              },
+            ],
+          },
           {
             id: "fluxo-caixa",
             name: "Fluxo de Caixa e Projeção Financeira",
+            type: "project",
             status: "em-desenvolvimento",
             url: "https://fluxocaixatte.vercel.app/",
             description:
@@ -138,6 +217,7 @@ export const departments: Department[] = [
           {
             id: "compensacao-bancaria",
             name: "Controle de Processos de Compensação Bancária",
+            type: "project",
             status: "em-desenvolvimento",
             url: "https://controle-processos-tesouraria.vercel.app/",
             description:
@@ -207,7 +287,22 @@ export const departments: Department[] = [
         role: "Diretor do Departamento de Planejamento, Orçamento e Gestão Estratégica",
       },
     ],
-    children: [],
+    children: [
+      {
+        id: "divisao-controle-economico",
+        name: "Divisão de Controle Econômico",
+        type: "division",
+        icon: "chart",
+        children: [],
+      },
+      {
+        id: "divisao-planejamento-estrategico",
+        name: "Divisão de Planejamento Estratégico",
+        type: "division",
+        icon: "clipboard",
+        children: [],
+      },
+    ],
   },
   {
     id: CABINET_ID,
@@ -234,8 +329,18 @@ function matchesStatus(status: ProjectStatus, filter: StatusFilter) {
   return filter === "todos" || status === filter;
 }
 
-export function isSector(child: OrgChild): child is Sector {
+export function isOrgUnit(child: OrgChild | OrgUnitChild): child is OrgUnit {
+  return child.type === "sector" || child.type === "division" || child.type === "supervision";
+}
+
+export function isSector(child: OrgChild): child is OrgUnit {
   return child.type === "sector";
+}
+
+export function isDirectProject(
+  child: OrgChild | OrgUnitChild | Project,
+): child is DirectProject {
+  return "type" in child && child.type === "project";
 }
 
 export type MapUnit = {
@@ -251,6 +356,7 @@ export type VisibleProject = {
   departmentName: string;
   sectorId?: string;
   sectorName?: string;
+  unitPath?: string;
 };
 
 const projectOrder = [
@@ -262,11 +368,46 @@ const projectOrder = [
   "compensacao-bancaria",
 ];
 
-export function countProjects(department: Department) {
-  return department.children.reduce((total, child) => {
-    if (isSector(child)) return total + child.projects.length;
+function countProjectsInChildren(children: OrgUnitChild[]): number {
+  return children.reduce((total, child) => {
+    if (isOrgUnit(child)) return total + countProjectsInChildren(child.children);
     return total + 1;
   }, 0);
+}
+
+export function countProjects(department: Department) {
+  return countProjectsInChildren(department.children);
+}
+
+function collectProjects(
+  children: OrgUnitChild[],
+  department: Department,
+  sector?: OrgUnit,
+  pathNames: string[] = [],
+): VisibleProject[] {
+  const items: VisibleProject[] = [];
+
+  for (const child of children) {
+    if (isOrgUnit(child)) {
+      const nextSector = sector ?? (child.type === "sector" ? child : undefined);
+      const nextPath =
+        child.type === "sector" ? pathNames : [...pathNames, child.name];
+      items.push(
+        ...collectProjects(child.children, department, nextSector, nextPath),
+      );
+    } else {
+      items.push({
+        project: child,
+        departmentId: department.id,
+        departmentName: department.name,
+        sectorId: sector?.id,
+        sectorName: sector?.name,
+        unitPath: pathNames.length > 0 ? pathNames.join(" · ") : undefined,
+      });
+    }
+  }
+
+  return items;
 }
 
 export function listMapUnits(source: Department[]): MapUnit[] {
@@ -279,29 +420,9 @@ export function listMapUnits(source: Department[]): MapUnit[] {
 }
 
 export function listVisibleProjects(source: Department[]): VisibleProject[] {
-  const items: VisibleProject[] = [];
-
-  for (const department of source) {
-    for (const child of department.children) {
-      if (isSector(child)) {
-        for (const project of child.projects) {
-          items.push({
-            project,
-            departmentId: department.id,
-            departmentName: department.name,
-            sectorId: child.id,
-            sectorName: child.name,
-          });
-        }
-      } else {
-        items.push({
-          project: child,
-          departmentId: department.id,
-          departmentName: department.name,
-        });
-      }
-    }
-  }
+  const items = source.flatMap((department) =>
+    collectProjects(department.children, department),
+  );
 
   return items.sort((left, right) => {
     const leftRank = projectOrder.indexOf(left.project.id);
@@ -324,6 +445,21 @@ export function projectWord(count: number) {
   return count === 1 ? "projeto" : "projetos";
 }
 
+function filterUnitChildren(
+  children: OrgUnitChild[],
+  status: StatusFilter,
+): OrgUnitChild[] {
+  return children.flatMap((child): OrgUnitChild[] => {
+    if (isOrgUnit(child)) {
+      const nested = filterUnitChildren(child.children, status);
+      // Estrutura sem projetos só aparece no filtro "todos".
+      if (status !== "todos" && countProjectsInChildren(nested) === 0) return [];
+      return [{ ...child, children: nested }];
+    }
+    return matchesStatus(child.status, status) ? [child] : [];
+  });
+}
+
 export function filterOrganization(
   source: Department[],
   status: StatusFilter,
@@ -333,24 +469,19 @@ export function filterOrganization(
     .filter((department) => areaId === "todas" || department.id === areaId)
     .map((department) => ({
       ...department,
-      children: department.children.flatMap((child): OrgChild[] => {
-        if (isSector(child)) {
-          const projects = child.projects.filter((project) =>
-            matchesStatus(project.status, status),
-          );
-          if (projects.length === 0) return [];
-          return [{ ...child, projects }];
-        }
-        return matchesStatus(child.status, status) ? [child] : [];
-      }),
+      children: filterUnitChildren(department.children, status),
     }));
+}
+
+function flattenProjects(children: OrgUnitChild[]): Project[] {
+  return children.flatMap((child) =>
+    isOrgUnit(child) ? flattenProjects(child.children) : [child],
+  );
 }
 
 export function computeStats(source: Department[]): OrganizationStats {
   const projects = source.flatMap((department) =>
-    department.children.flatMap((child) =>
-      isSector(child) ? child.projects : [child],
-    ),
+    flattenProjects(department.children),
   );
 
   return {

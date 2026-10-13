@@ -1,10 +1,12 @@
 import { accentFor } from "../data/accents.ts";
-import type { Sector } from "../data/organization.ts";
+import type { IconKey, OrgUnit } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { iconMap } from "./icons.tsx";
 
 type SectorNodeProps = {
-  sector: Sector;
+  sector?: OrgUnit;
+  name?: string;
+  icon?: IconKey;
   departmentId: string;
   accentKey?: string;
   active?: boolean;
@@ -12,11 +14,15 @@ type SectorNodeProps = {
 
 export function SectorNode({
   sector,
+  name,
+  icon,
   departmentId,
   accentKey,
   active = false,
 }: SectorNodeProps) {
-  const Icon = iconMap[sector.icon];
+  const label = name ?? sector?.name ?? "";
+  const iconKey = icon ?? sector?.icon ?? "building";
+  const Icon = iconMap[iconKey];
   const accent = accentFor(accentKey ?? departmentId);
 
   return (
@@ -38,7 +44,7 @@ export function SectorNode({
       >
         <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
-      <p className="text-sm font-semibold text-slate-800">{sector.name}</p>
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
     </div>
   );
 }

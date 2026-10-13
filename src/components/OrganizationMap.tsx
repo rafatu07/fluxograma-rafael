@@ -12,14 +12,15 @@ import { Crosshair, Minus, Plus, Scan } from "lucide-react";
 import { accentFor } from "../data/accents.ts";
 import {
   CABINET_ID,
-  isSector,
+  isOrgUnit,
   secretariatOfficers,
   type Department,
   type FlowHighlight,
   type OrgChild,
+  type OrgUnit,
+  type OrgUnitChild,
   type Project,
   type ProjectContext,
-  type Sector,
 } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { DepartmentNode, OfficerList } from "./DepartmentNode.tsx";
@@ -34,7 +35,10 @@ type OrganizationMapProps = {
 
 type HighlightHandler = (
   project: Project,
-  sectorId: string | undefined,
+  meta: {
+    sectorId?: string;
+    unitFlowId?: string;
+  },
   active: boolean,
 ) => void;
 
@@ -42,6 +46,12 @@ const MIN_SCALE = 0.2;
 const MAX_SCALE = 2;
 const ZOOM_STEP = 1.15;
 const FIT_MARGIN = 48;
+
+/** Metade do tronco vertical antes do bus de unidades (pareado com LATERAL_PROJECT_OFFSET). */
+const LATERAL_TRUNK_SPACER = "h-52";
+const LATERAL_PROJECT_OFFSET = "pt-20";
+const LATERAL_TRUNK_GAP_LEFT = "mr-32";
+const LATERAL_TRUNK_GAP_RIGHT = "ml-2";
 
 type CanvasView = {
   x: number;
@@ -488,7 +498,17 @@ function useConnectors(
       if (!highlight) return false;
       if (box.id === highlight.departmentId) return true;
       if (box.id === highlight.projectId) return true;
-      if (highlight.sectorId && box.id === `${highlight.departmentId}:${highlight.sectorId}`) {
+      if (
+        highlight.unitFlowId &&
+        (box.id === highlight.unitFlowId ||
+          highlight.unitFlowId.startsWith(`${box.id}:`))
+      ) {
+        return true;
+      }
+      if (
+        highlight.sectorId &&
+        box.id === `${highlight.departmentId}:${highlight.sectorId}`
+      ) {
         return true;
       }
       return false;
@@ -602,40 +622,49 @@ function useConnectors(
           continue;
         }
 
-        // Projetos diretos ao lado do tronco; setores saem do mesmo tronco (padrão Gabinete).
-        const directs = children.filter((child) => !child.sector);
-        const sectorNodes = children.filter((child) => Boolean(child.sector));
-        if (directs.length > 0 && sectorNodes.length > 0) {
-          const sectorTop = Math.min(...sectorNodes.map((child) => child.top));
-          if (sectorTop > parent.bottom) {
-            const armY = (parent.bottom + sectorTop) / 2;
-            const directActive = directs.some(onPath) || onPath(parent);
-            const sectorActive = sectorNodes.some(onPath) || onPath(parent);
+        // Projetos laterais (id sem ':') + unidades (id com ':') no mesmo tronco.
+        const lateralBoxes = children.filter((child) => !child.id.includes(":"));
+        const unitBoxes = children.filter((child) => child.id.includes(":"));
+        if (lateralBoxes.length > 0 && unitBoxes.length > 0) {
+          const unitTop = Math.min(...unitBoxes.map((child) => child.top));
+          if (unitTop > parent.bottom) {
+            const armY = (parent.bottom + unitTop) / 2;
+            const lateralActive = lateralBoxes.some(onPath) || onPath(parent);
+            const unitActive = unitBoxes.some(onPath) || onPath(parent);
 
             next.push({
               key: `${parentId}-stem-upper`,
               d: segment(parent.cx, parent.bottom, parent.cx, armY),
-              active: directActive || sectorActive,
+              active: lateralActive || unitActive,
             });
-            for (const direct of [...directs].sort((a, b) => a.cx - b.cx)) {
-              const active = onPath(direct) || onPath(parent);
+
+            // Stub único em armY + cadeia vertical entre projetos empilhados.
+            const orderedLaterals = [...lateralBoxes].sort((a, b) => a.top - b.top);
+            const railX = orderedLaterals[0].cx;
+            next.push({
+              key: `${parentId}-lateral-stub`,
+              d: segment(parent.cx, armY, railX, armY),
+              active: lateralActive,
+            });
+            const firstTop = orderedLaterals[0].top;
+            if (firstTop > armY + 0.5) {
               next.push({
-                key: `${direct.id}-arm`,
-                d: segment(parent.cx, armY, direct.cx, armY),
-                active,
-              });
-              next.push({
-                key: `${direct.id}-drop`,
-                d: segment(
-                  direct.cx,
-                  armY,
-                  direct.cx,
-                  Math.max(direct.top, armY),
-                ),
-                active,
+                key: `${orderedLaterals[0].id}-drop`,
+                d: segment(railX, armY, railX, firstTop),
+                active: onPath(orderedLaterals[0]) || onPath(parent),
               });
             }
-            appendBus(`${parentId}-sectors`, parent, sectorNodes, armY);
+            for (let i = 1; i < orderedLaterals.length; i++) {
+              const prev = orderedLaterals[i - 1];
+              const curr = orderedLaterals[i];
+              next.push({
+                key: `${curr.id}-chain`,
+                d: segment(railX, prev.bottom, railX, curr.top),
+                active: onPath(curr) || onPath(parent),
+              });
+            }
+
+            appendBus(`${parentId}-units`, parent, unitBoxes, armY);
             continue;
           }
         }
@@ -864,12 +893,17 @@ function DepartmentBranch({
   omitTopSpacer?: boolean;
 }) {
   const active = focusId === department.id;
-  const directProjects = department.children.filter((child) => !isSector(child));
-  const sectors = department.children.filter(isSector);
-  const highlightProject: HighlightHandler = (project, sectorId, hovered) => {
+  const directProjects = department.children.filter((child) => !isOrgUnit(child));
+  const units = department.children.filter(isOrgUnit);
+  const highlightProject: HighlightHandler = (project, meta, hovered) => {
     onHighlight(
       hovered
-        ? { departmentId: department.id, sectorId, projectId: project.id }
+        ? {
+            departmentId: department.id,
+            sectorId: meta.sectorId,
+            unitFlowId: meta.unitFlowId,
+            projectId: project.id,
+          }
         : null,
     );
   };
@@ -883,146 +917,272 @@ function DepartmentBranch({
       {omitTopSpacer ? null : (
         <div className="h-8 w-full shrink-0" aria-hidden="true" />
       )}
-      <div
-        className="w-64"
-        data-flow-id={department.id}
-        data-flow-parent="secretaria"
-        data-flow-department={department.id}
-      >
-        <DepartmentNode
-          department={department}
-          active={active}
-          onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
-        />
-      </div>
-      {directProjects.length > 0 && sectors.length > 0 ? (
-        <div className="flex items-start">
+      {directProjects.length > 0 && units.length > 0 ? (
+        <div className="flex w-max flex-col items-center">
           <div
-            className={cn(
-              "flex items-start",
-              // Alinha o topo do projeto ao meio do tronco (metade de h-52 ≈ pt-28).
-              "mr-16 pt-28",
-            )}
+            className="w-64"
+            data-flow-id={department.id}
+            data-flow-parent="secretaria"
+            data-flow-department={department.id}
           >
-            <ChildRow
-              childrenNodes={directProjects}
+            <DepartmentNode
               department={department}
-              highlight={highlight}
-              areaFocus={areaFocus}
-              onSelect={onSelect}
-              onHighlight={highlightProject}
-              omitTopSpacer
+              active={active}
+              onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
             />
           </div>
-          <div className="flex flex-col items-center">
-            <div className="h-52 shrink-0" aria-hidden="true" />
-            <ChildRow
-              childrenNodes={sectors}
-              department={department}
-              highlight={highlight}
-              areaFocus={areaFocus}
-              onSelect={onSelect}
-              onHighlight={highlightProject}
-            />
-          </div>
-        </div>
-      ) : directProjects.length > 0 || sectors.length > 0 ? (
-        <div className="mt-0 flex flex-col items-center">
           <div className="h-6 shrink-0" aria-hidden="true" />
-          <ChildRow
-            childrenNodes={
-              directProjects.length > 0 ? directProjects : sectors
-            }
+          <MixedUnitChildrenLayout
+            lateralProjects={directProjects}
+            units={units}
             department={department}
+            parentFlowId={department.id}
             highlight={highlight}
             areaFocus={areaFocus}
             onSelect={onSelect}
             onHighlight={highlightProject}
+            lateralSide="left"
           />
         </div>
-      ) : null}
+      ) : (
+        <>
+          <div
+            className="w-64"
+            data-flow-id={department.id}
+            data-flow-parent="secretaria"
+            data-flow-department={department.id}
+          >
+            <DepartmentNode
+              department={department}
+              active={active}
+              onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
+            />
+          </div>
+          {directProjects.length > 0 || units.length > 0 ? (
+            <div className="mt-0 flex flex-col items-center">
+              <div className="h-6 shrink-0" aria-hidden="true" />
+              <ChildRow
+                childrenNodes={
+                  directProjects.length > 0 ? directProjects : units
+                }
+                department={department}
+                parentFlowId={department.id}
+                highlight={highlight}
+                areaFocus={areaFocus}
+                onSelect={onSelect}
+                onHighlight={highlightProject}
+              />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
 
-function childActive(
+type ChildRowSharedProps = {
+  department: Department;
+  parentFlowId: string;
+  highlight: FlowHighlight | null;
+  areaFocus: string | null;
+  onSelect: (selection: ProjectContext) => void;
+  onHighlight: HighlightHandler;
+  rootSector?: OrgUnit;
+  pathNames?: string[];
+};
+
+function partitionMixedChildren(children: OrgUnitChild[]) {
+  return {
+    lateralProjects: children.filter((child) => !isOrgUnit(child)),
+    units: children.filter(isOrgUnit),
+  };
+}
+
+function MixedUnitChildrenLayout({
+  lateralProjects,
+  units,
+  department,
+  parentFlowId,
+  highlight,
+  areaFocus,
+  onSelect,
+  onHighlight,
+  rootSector,
+  pathNames = [],
+  lateralSide = "left",
+}: {
+  lateralProjects: OrgUnitChild[];
+  units: OrgUnit[];
+  lateralSide?: "left" | "right";
+} & ChildRowSharedProps) {
+  const unitsColumn = (
+    <div className="flex flex-col items-center">
+      <div
+        className={cn(LATERAL_TRUNK_SPACER, "shrink-0")}
+        aria-hidden="true"
+      />
+      <ChildRow
+        childrenNodes={units}
+        department={department}
+        parentFlowId={parentFlowId}
+        highlight={highlight}
+        areaFocus={areaFocus}
+        onSelect={onSelect}
+        onHighlight={onHighlight}
+        rootSector={rootSector}
+        pathNames={pathNames}
+      />
+    </div>
+  );
+
+  const lateralRow = (
+    <ChildRow
+      childrenNodes={lateralProjects}
+      department={department}
+      parentFlowId={parentFlowId}
+      highlight={highlight}
+      areaFocus={areaFocus}
+      onSelect={onSelect}
+      onHighlight={onHighlight}
+      rootSector={rootSector}
+      pathNames={pathNames}
+      omitTopSpacer
+      layout="column"
+      columnAlign={lateralSide === "left" ? "end" : "start"}
+    />
+  );
+
+  const lateralColumn =
+    lateralSide === "left" ? (
+      <div
+        className={cn(
+          "absolute top-0 w-0 right-1/2",
+          LATERAL_TRUNK_GAP_LEFT,
+          LATERAL_PROJECT_OFFSET,
+        )}
+      >
+        <div className="absolute top-0 right-0 flex w-max flex-col items-end">
+          {lateralRow}
+        </div>
+      </div>
+    ) : (
+      <div
+        className={cn(
+          "absolute top-0 left-full flex flex-col items-start",
+          LATERAL_TRUNK_GAP_RIGHT,
+          LATERAL_PROJECT_OFFSET,
+        )}
+      >
+        {lateralRow}
+      </div>
+    );
+
+  return (
+    <div className="relative w-max">
+      {unitsColumn}
+      {lateralColumn}
+    </div>
+  );
+}
+
+function unitActive(
   departmentId: string,
-  focusId: string | undefined,
+  unitFlowId: string,
   highlight: FlowHighlight | null,
   areaFocus: string | null,
-  sectorId?: string,
-  projectId?: string,
 ) {
   if (areaFocus === departmentId && !highlight) return true;
-  if (!highlight || highlight.departmentId !== departmentId) return focusId === departmentId && !highlight && !sectorId && !projectId;
-  if (projectId) return highlight.projectId === projectId;
-  if (sectorId) return highlight.sectorId === sectorId;
-  return highlight.departmentId === departmentId;
+  if (!highlight || highlight.departmentId !== departmentId) return false;
+  if (highlight.unitFlowId) {
+    return (
+      highlight.unitFlowId === unitFlowId ||
+      highlight.unitFlowId.startsWith(`${unitFlowId}:`)
+    );
+  }
+  if (highlight.sectorId && unitFlowId.endsWith(`:${highlight.sectorId}`)) {
+    return true;
+  }
+  return false;
 }
 
 function ChildRow({
   childrenNodes,
   department,
+  parentFlowId,
   highlight,
   areaFocus,
   onSelect,
   onHighlight,
-  sector,
+  rootSector,
+  pathNames = [],
   omitTopSpacer = false,
+  layout = "row",
+  columnAlign = "end",
 }: {
-  childrenNodes: OrgChild[] | Project[];
+  childrenNodes: OrgChild[] | OrgUnitChild[];
   department: Department;
+  parentFlowId: string;
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
   onHighlight: HighlightHandler;
-  sector?: Sector;
+  rootSector?: OrgUnit;
+  pathNames?: string[];
   omitTopSpacer?: boolean;
+  layout?: "row" | "column";
+  columnAlign?: "start" | "end";
 }) {
   return (
-    <div className="flex items-start">
+    <div
+      className={cn(
+        "flex items-start",
+        layout === "column" &&
+          cn(
+            "flex-col gap-3",
+            columnAlign === "end" ? "items-end" : "items-start",
+          ),
+      )}
+    >
       {childrenNodes.map((child) => {
-        const id = child.id;
-        const sectorId = sector?.id ?? (isOrgChild(child) && isSector(child) ? child.id : undefined);
-        const projectId = sector || !isOrgChild(child) || !isSector(child) ? child.id : undefined;
-        const sectorNode = isOrgChild(child) && isSector(child);
-        const parentId = sector ? `${department.id}:${sector.id}` : department.id;
-        const anchorId = sectorNode ? `${department.id}:${child.id}` : child.id;
+        const unitNode = isOrgUnit(child);
 
         return (
-          <div key={id} className="flex w-max flex-col items-center px-2">
+          <div key={child.id} className="flex w-max flex-col items-center px-2">
             {omitTopSpacer ? null : (
               <div
                 className={cn(
                   "w-full shrink-0",
-                  sectorNode ? "h-8" : "h-5",
+                  unitNode ? "h-8" : "h-5",
                 )}
                 aria-hidden="true"
               />
             )}
-            {sectorNode ? (
-              <SectorBranch
-                sector={child}
+            {unitNode ? (
+              <UnitBranch
+                unit={child}
                 department={department}
+                parentFlowId={parentFlowId}
                 highlight={highlight}
                 areaFocus={areaFocus}
                 onSelect={onSelect}
                 onHighlight={onHighlight}
+                rootSector={rootSector}
+                pathNames={pathNames}
               />
             ) : (
               <div
                 className="w-52"
-                data-flow-id={anchorId}
-                data-flow-parent={parentId}
+                data-flow-id={child.id}
+                data-flow-parent={parentFlowId}
                 data-flow-department={department.id}
-                data-flow-sector={sector?.id ?? ""}
+                data-flow-sector={rootSector?.id ?? ""}
               >
                 <ProjectCard
-                  project={child as Project}
+                  project={child}
                   department={department}
-                  sector={sector}
-                  sectorId={sectorId}
-                  projectId={projectId}
+                  rootSector={rootSector}
+                  unitFlowId={parentFlowId === department.id ? undefined : parentFlowId}
+                  pathNames={pathNames}
                   highlight={highlight}
                   areaFocus={areaFocus}
                   onSelect={onSelect}
@@ -1037,60 +1197,93 @@ function ChildRow({
   );
 }
 
-function isOrgChild(child: OrgChild | Project): child is OrgChild {
-  return "type" in child;
-}
-
-function SectorBranch({
-  sector,
+function UnitBranch({
+  unit,
   department,
+  parentFlowId,
   highlight,
   areaFocus,
   onSelect,
   onHighlight,
+  rootSector,
+  pathNames = [],
 }: {
-  sector: Sector;
+  unit: OrgUnit;
   department: Department;
+  parentFlowId: string;
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
   onHighlight: HighlightHandler;
+  rootSector?: OrgUnit;
+  pathNames?: string[];
 }) {
-  const accentKey = sector.id === "tesouraria" ? sector.id : department.id;
-  const active = childActive(
-    department.id,
-    undefined,
-    highlight,
-    areaFocus,
-    sector.id,
-  );
+  const nextRoot =
+    rootSector ?? (unit.type === "sector" ? unit : undefined);
+  const nextPath =
+    unit.type === "sector" ? pathNames : [...pathNames, unit.name];
+  const flowId = `${parentFlowId}:${unit.id}`;
+  const accentKey =
+    nextRoot?.id === "tesouraria" ? nextRoot.id : department.id;
+  const active = unitActive(department.id, flowId, highlight, areaFocus);
 
   return (
     <div className="flex flex-col items-center">
       <div
         className="w-52"
-        data-flow-id={`${department.id}:${sector.id}`}
-        data-flow-parent={department.id}
+        data-flow-id={flowId}
+        data-flow-parent={parentFlowId}
         data-flow-department={department.id}
-        data-flow-sector={sector.id}
+        data-flow-sector={nextRoot?.id ?? unit.id}
       >
         <SectorNode
-          sector={sector}
+          name={unit.name}
+          icon={unit.icon}
           departmentId={department.id}
           accentKey={accentKey}
           active={active}
         />
       </div>
-      <div className="h-6" aria-hidden="true" />
-      <ChildRow
-        childrenNodes={sector.projects}
-        department={department}
-        highlight={highlight}
-        areaFocus={areaFocus}
-        onSelect={onSelect}
-        onHighlight={onHighlight}
-        sector={sector}
-      />
+      {unit.children.length > 0 ? (
+        <>
+          <div className="h-6" aria-hidden="true" />
+          {(() => {
+            const { lateralProjects, units: childUnits } = partitionMixedChildren(
+              unit.children,
+            );
+            if (lateralProjects.length > 0 && childUnits.length > 0) {
+              return (
+                <MixedUnitChildrenLayout
+                  lateralProjects={lateralProjects}
+                  units={childUnits}
+                  department={department}
+                  parentFlowId={flowId}
+                  highlight={highlight}
+                  areaFocus={areaFocus}
+                  onSelect={onSelect}
+                  onHighlight={onHighlight}
+                  rootSector={nextRoot}
+                  pathNames={nextPath}
+                  lateralSide={unit.id === "tesouraria" ? "right" : "left"}
+                />
+              );
+            }
+            return (
+              <ChildRow
+                childrenNodes={unit.children}
+                department={department}
+                parentFlowId={flowId}
+                highlight={highlight}
+                areaFocus={areaFocus}
+                onSelect={onSelect}
+                onHighlight={onHighlight}
+                rootSector={nextRoot}
+                pathNames={nextPath}
+              />
+            );
+          })()}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -1098,7 +1291,9 @@ function SectorBranch({
 function ProjectCard({
   project,
   department,
-  sector,
+  rootSector,
+  unitFlowId,
+  pathNames,
   highlight,
   areaFocus,
   onSelect,
@@ -1106,15 +1301,18 @@ function ProjectCard({
 }: {
   project: Project;
   department: Department;
-  sector?: Sector;
-  sectorId?: string;
-  projectId?: string;
+  rootSector?: OrgUnit;
+  unitFlowId?: string;
+  pathNames: string[];
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
   onHighlight: HighlightHandler;
 }) {
-  const accentKey = sector?.id === "tesouraria" ? sector.id : department.id;
+  const accentKey =
+    rootSector?.id === "tesouraria" ? rootSector.id : department.id;
+  const unitPath =
+    pathNames.length > 0 ? pathNames.join(" · ") : undefined;
 
   return (
     <ProjectNode
@@ -1122,17 +1320,25 @@ function ProjectCard({
       departmentId={department.id}
       accentKey={accentKey}
       departmentName={department.name}
-      sectorName={sector?.name}
+      sectorName={rootSector?.name}
+      unitPath={unitPath}
       active={highlight?.projectId === project.id}
       linked={areaFocus === department.id && !highlight}
       onOpen={() =>
         onSelect({
           project,
           departmentName: department.name,
-          sectorName: sector?.name,
+          sectorName: rootSector?.name,
+          unitPath,
         })
       }
-      onHighlight={(active) => onHighlight(project, sector?.id, active)}
+      onHighlight={(active) =>
+        onHighlight(
+          project,
+          { sectorId: rootSector?.id, unitFlowId },
+          active,
+        )
+      }
     />
   );
 }
