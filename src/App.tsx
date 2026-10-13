@@ -5,12 +5,14 @@ import { Header } from "./components/Header.tsx";
 import { InteractiveBackground } from "./components/InteractiveBackground.tsx";
 import { OrganizationMap } from "./components/OrganizationMap.tsx";
 import { ProjectModal } from "./components/ProjectModal.tsx";
+import { StaffPanel } from "./components/StaffPanel.tsx";
 import { Stats } from "./components/Stats.tsx";
 import {
   computeStats,
   departments,
   filterOrganization,
   type ProjectContext,
+  type StaffContext,
   type StatusFilter,
 } from "./data/organization.ts";
 
@@ -18,6 +20,9 @@ export default function App() {
   const [status, setStatus] = useState<StatusFilter>("todos");
   const [areaId, setAreaId] = useState("todas");
   const [selection, setSelection] = useState<ProjectContext | null>(null);
+  const [staffSelection, setStaffSelection] = useState<StaffContext | null>(
+    null,
+  );
 
   const visibleDepartments = useMemo(
     () => filterOrganization(departments, status, areaId),
@@ -46,11 +51,16 @@ export default function App() {
             key={`${status}-${areaId}`}
             departments={visibleDepartments}
             onSelect={setSelection}
+            onOpenStaff={setStaffSelection}
           />
         </main>
         <Footer />
       </div>
       <ProjectModal selection={selection} onClose={() => setSelection(null)} />
+      <StaffPanel
+        selection={staffSelection}
+        onClose={() => setStaffSelection(null)}
+      />
     </div>
   );
 }

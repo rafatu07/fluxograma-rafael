@@ -21,6 +21,7 @@ import {
   type OrgUnitChild,
   type Project,
   type ProjectContext,
+  type StaffContext,
 } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { DepartmentNode, OfficerList } from "./DepartmentNode.tsx";
@@ -31,6 +32,7 @@ import { SectorNode } from "./SectorNode.tsx";
 type OrganizationMapProps = {
   departments: Department[];
   onSelect: (selection: ProjectContext) => void;
+  onOpenStaff: (selection: StaffContext) => void;
 };
 
 type HighlightHandler = (
@@ -692,7 +694,11 @@ function useConnectors(
   return segments;
 }
 
-export function OrganizationMap({ departments, onSelect }: OrganizationMapProps) {
+export function OrganizationMap({
+  departments,
+  onSelect,
+  onOpenStaff,
+}: OrganizationMapProps) {
   const [highlight, setHighlight] = useState<FlowHighlight | null>(null);
   const [areaFocus, setAreaFocus] = useState<string | null>(null);
   const focusId = highlight?.departmentId ?? areaFocus ?? undefined;
@@ -816,6 +822,7 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
                     highlight={highlight}
                     areaFocus={areaFocus}
                     onSelect={onSelect}
+                    onOpenStaff={onOpenStaff}
                     onHighlight={setHighlight}
                     onAreaFocus={setAreaFocus}
                     omitTopSpacer
@@ -837,6 +844,7 @@ export function OrganizationMap({ departments, onSelect }: OrganizationMapProps)
                       highlight={highlight}
                       areaFocus={areaFocus}
                       onSelect={onSelect}
+                      onOpenStaff={onOpenStaff}
                       onHighlight={setHighlight}
                       onAreaFocus={setAreaFocus}
                     />
@@ -879,6 +887,7 @@ function DepartmentBranch({
   highlight,
   areaFocus,
   onSelect,
+  onOpenStaff,
   onHighlight,
   onAreaFocus,
   omitTopSpacer = false,
@@ -888,6 +897,7 @@ function DepartmentBranch({
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
+  onOpenStaff: (selection: StaffContext) => void;
   onHighlight: (highlight: FlowHighlight | null) => void;
   onAreaFocus: (departmentId: string | null) => void;
   omitTopSpacer?: boolean;
@@ -929,6 +939,7 @@ function DepartmentBranch({
               department={department}
               active={active}
               onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
+              onOpenStaff={onOpenStaff}
             />
           </div>
           <div className="h-6 shrink-0" aria-hidden="true" />
@@ -940,6 +951,7 @@ function DepartmentBranch({
             highlight={highlight}
             areaFocus={areaFocus}
             onSelect={onSelect}
+            onOpenStaff={onOpenStaff}
             onHighlight={highlightProject}
             lateralSide="left"
           />
@@ -956,6 +968,7 @@ function DepartmentBranch({
               department={department}
               active={active}
               onHover={(hovered) => onAreaFocus(hovered ? department.id : null)}
+              onOpenStaff={onOpenStaff}
             />
           </div>
           {directProjects.length > 0 || units.length > 0 ? (
@@ -970,6 +983,7 @@ function DepartmentBranch({
                 highlight={highlight}
                 areaFocus={areaFocus}
                 onSelect={onSelect}
+                onOpenStaff={onOpenStaff}
                 onHighlight={highlightProject}
               />
             </div>
@@ -986,6 +1000,7 @@ type ChildRowSharedProps = {
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
+  onOpenStaff: (selection: StaffContext) => void;
   onHighlight: HighlightHandler;
   rootSector?: OrgUnit;
   pathNames?: string[];
@@ -1006,6 +1021,7 @@ function MixedUnitChildrenLayout({
   highlight,
   areaFocus,
   onSelect,
+  onOpenStaff,
   onHighlight,
   rootSector,
   pathNames = [],
@@ -1028,6 +1044,7 @@ function MixedUnitChildrenLayout({
         highlight={highlight}
         areaFocus={areaFocus}
         onSelect={onSelect}
+        onOpenStaff={onOpenStaff}
         onHighlight={onHighlight}
         rootSector={rootSector}
         pathNames={pathNames}
@@ -1043,6 +1060,7 @@ function MixedUnitChildrenLayout({
       highlight={highlight}
       areaFocus={areaFocus}
       onSelect={onSelect}
+      onOpenStaff={onOpenStaff}
       onHighlight={onHighlight}
       rootSector={rootSector}
       pathNames={pathNames}
@@ -1112,6 +1130,7 @@ function ChildRow({
   highlight,
   areaFocus,
   onSelect,
+  onOpenStaff,
   onHighlight,
   rootSector,
   pathNames = [],
@@ -1125,6 +1144,7 @@ function ChildRow({
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
+  onOpenStaff: (selection: StaffContext) => void;
   onHighlight: HighlightHandler;
   rootSector?: OrgUnit;
   pathNames?: string[];
@@ -1165,6 +1185,7 @@ function ChildRow({
                 highlight={highlight}
                 areaFocus={areaFocus}
                 onSelect={onSelect}
+                onOpenStaff={onOpenStaff}
                 onHighlight={onHighlight}
                 rootSector={rootSector}
                 pathNames={pathNames}
@@ -1204,6 +1225,7 @@ function UnitBranch({
   highlight,
   areaFocus,
   onSelect,
+  onOpenStaff,
   onHighlight,
   rootSector,
   pathNames = [],
@@ -1214,6 +1236,7 @@ function UnitBranch({
   highlight: FlowHighlight | null;
   areaFocus: string | null;
   onSelect: (selection: ProjectContext) => void;
+  onOpenStaff: (selection: StaffContext) => void;
   onHighlight: HighlightHandler;
   rootSector?: OrgUnit;
   pathNames?: string[];
@@ -1242,6 +1265,8 @@ function UnitBranch({
           departmentId={department.id}
           accentKey={accentKey}
           active={active}
+          staff={unit.staff}
+          onOpenStaff={onOpenStaff}
         />
       </div>
       {unit.children.length > 0 ? (
@@ -1261,6 +1286,7 @@ function UnitBranch({
                   highlight={highlight}
                   areaFocus={areaFocus}
                   onSelect={onSelect}
+                  onOpenStaff={onOpenStaff}
                   onHighlight={onHighlight}
                   rootSector={nextRoot}
                   pathNames={nextPath}
@@ -1276,6 +1302,7 @@ function UnitBranch({
                 highlight={highlight}
                 areaFocus={areaFocus}
                 onSelect={onSelect}
+                onOpenStaff={onOpenStaff}
                 onHighlight={onHighlight}
                 rootSector={nextRoot}
                 pathNames={nextPath}

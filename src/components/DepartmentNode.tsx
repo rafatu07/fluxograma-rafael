@@ -1,9 +1,11 @@
+import { Users } from "lucide-react";
 import { accentFor } from "../data/accents.ts";
 import {
   countProjects,
   projectWord,
   type Department,
   type Officer,
+  type StaffContext,
 } from "../data/organization.ts";
 import { cn } from "../lib/utils.ts";
 import { iconMap } from "./icons.tsx";
@@ -12,6 +14,7 @@ type DepartmentNodeProps = {
   department: Department;
   active?: boolean;
   onHover?: (active: boolean) => void;
+  onOpenStaff?: (selection: StaffContext) => void;
 };
 
 export function OfficerList({ officers }: { officers: readonly Officer[] }) {
@@ -31,10 +34,13 @@ export function DepartmentNode({
   department,
   active = false,
   onHover,
+  onOpenStaff,
 }: DepartmentNodeProps) {
   const Icon = iconMap[department.icon];
   const accent = accentFor(department.id);
   const total = countProjects(department);
+  const staff = department.staff ?? [];
+  const hasStaff = staff.length > 0;
 
   return (
     <article
@@ -67,6 +73,24 @@ export function DepartmentNode({
         {department.sigla}
       </p>
       <OfficerList officers={department.officers} />
+      {hasStaff && onOpenStaff ? (
+        <button
+          type="button"
+          className="mt-3 inline-flex items-center justify-center gap-1.5 self-center rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenStaff({
+              title: department.name,
+              subtitle: department.sigla,
+              officers: department.officers,
+              staff,
+            });
+          }}
+        >
+          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+          Equipe
+        </button>
+      ) : null}
       <p className="mt-3 pt-0 text-xs text-muted">
         {total} {projectWord(total)}
       </p>

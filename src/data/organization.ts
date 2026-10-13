@@ -32,6 +32,8 @@ export type OrgUnit = {
   name: string;
   type: OrgUnitType;
   icon: IconKey;
+  /** Servidores além do responsável principal; abertos no painel lateral. */
+  staff?: Officer[];
   children: OrgUnitChild[];
 };
 
@@ -57,7 +59,16 @@ export type Department = {
   sigla: string;
   icon: IconKey;
   officers: Officer[];
+  /** Servidores além do responsável principal; abertos no painel lateral. */
+  staff?: Officer[];
   children: OrgChild[];
+};
+
+export type StaffContext = {
+  title: string;
+  subtitle?: string;
+  officers: Officer[];
+  staff: Officer[];
 };
 
 export const secretariatOfficers: Officer[] = [
@@ -310,6 +321,12 @@ export const departments: Department[] = [
     sigla: "GSEFAZ",
     icon: "building",
     officers: [{ name: "Fabio Augusto de Alcantara", role: "Chefe de Gabinete" }],
+    staff: [
+      { name: "Paulo Gustavo Correa Silveira", role: "Assessor" },
+      { name: "Elza Karina Maciel Cardoso", role: "Assessor" },
+      { name: "Alexandre Theofilo Jacyntho", role: "Assessor" },
+      { name: "Rafael Turino de Oliveira", role: "Escriturário" },
+    ],
     children: [
       {
         id: "processos-obras",
