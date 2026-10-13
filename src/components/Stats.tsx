@@ -8,6 +8,7 @@ const labels = [
   { key: "projects", label: "Projetos", tone: "#2563EB" },
   { key: "completed", label: "Concluídos", tone: "#059669" },
   { key: "inProgress", label: "Em desenvolvimento", tone: "#D9A441" },
+  { key: "inHomologation", label: "Em homologação", tone: "#0284C7" },
   { key: "areas", label: "Áreas", tone: "#163B5C" },
 ] as const;
 
@@ -15,7 +16,7 @@ export function Stats({ stats }: StatsProps) {
   return (
     <section
       aria-label="Indicadores"
-      className="enter mx-auto grid w-full max-w-3xl grid-cols-2 gap-3 px-4 py-6 sm:grid-cols-4 sm:px-6"
+      className="enter mx-auto grid w-full max-w-4xl grid-cols-2 gap-3 px-4 py-6 sm:grid-cols-3 lg:grid-cols-5 sm:px-6"
       style={{ animationDelay: "70ms" }}
     >
       {labels.map((item) => (

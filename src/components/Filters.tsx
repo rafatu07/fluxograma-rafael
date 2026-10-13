@@ -17,6 +17,7 @@ const statusOptions: { id: StatusFilter; label: string }[] = [
   { id: "todos", label: "Todos" },
   { id: "concluido", label: "Concluídos" },
   { id: "em-desenvolvimento", label: "Em desenvolvimento" },
+  { id: "em-homologacao", label: "Em homologação" },
 ];
 
 export function Filters({

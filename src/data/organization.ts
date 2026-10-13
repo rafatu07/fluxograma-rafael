@@ -1,4 +1,7 @@
-export type ProjectStatus = "concluido" | "em-desenvolvimento";
+export type ProjectStatus =
+  | "concluido"
+  | "em-desenvolvimento"
+  | "em-homologacao";
 
 export type StatusFilter = "todos" | ProjectStatus;
 
@@ -94,12 +97,14 @@ export type OrganizationStats = {
   projects: number;
   completed: number;
   inProgress: number;
+  inHomologation: number;
   areas: number;
 };
 
 export const statusLabel: Record<ProjectStatus, string> = {
   concluido: "Concluído",
   "em-desenvolvimento": "Em desenvolvimento",
+  "em-homologacao": "Em homologação",
 };
 
 export const CABINET_ID = "gabinete";
@@ -213,10 +218,10 @@ export const departments: Department[] = [
             id: "fluxo-caixa",
             name: "Fluxo de Caixa e Projeção Financeira",
             type: "project",
-            status: "em-desenvolvimento",
+            status: "concluido",
             url: "https://fluxocaixatte.vercel.app/",
             description:
-              "Sistema em desenvolvimento para controle do fluxo de caixa e projeção financeira, com foco na organização, acompanhamento e visualização dos recursos.",
+              "Sistema para controle do fluxo de caixa e projeção financeira, com foco na organização, acompanhamento e visualização dos recursos.",
             icon: "chart",
             highlights: [
               "Fluxo de Caixa",
@@ -229,10 +234,20 @@ export const departments: Department[] = [
             id: "compensacao-bancaria",
             name: "Controle de Processos de Compensação Bancária",
             type: "project",
-            status: "em-desenvolvimento",
+            status: "em-homologacao",
             url: "https://controle-processos-tesouraria.vercel.app/",
             description:
-              "Sistema em desenvolvimento para controle, organização e acompanhamento dos processos de compensação bancária.",
+              "Sistema em homologação para controle, organização e acompanhamento dos processos de compensação bancária.",
+            icon: "banknote",
+          },
+          {
+            id: "saldos-bancarios",
+            name: "Conferência de Saldos Bancários",
+            type: "project",
+            status: "em-homologacao",
+            url: "https://saldo-bancario.vercel.app/login",
+            description:
+              "Sistema em homologação para conferência e controle dos saldos bancários da Prefeitura Municipal de Taubaté.",
             icon: "banknote",
           },
         ],
@@ -383,6 +398,7 @@ const projectOrder = [
   "processos-obras",
   "fluxo-caixa",
   "compensacao-bancaria",
+  "saldos-bancarios",
 ];
 
 function countProjectsInChildren(children: OrgUnitChild[]): number {
@@ -507,6 +523,9 @@ export function computeStats(source: Department[]): OrganizationStats {
       .length,
     inProgress: projects.filter(
       (project) => project.status === "em-desenvolvimento",
+    ).length,
+    inHomologation: projects.filter(
+      (project) => project.status === "em-homologacao",
     ).length,
     areas: source.length,
   };
