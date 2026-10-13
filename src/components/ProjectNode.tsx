@@ -86,9 +86,6 @@ export function ProjectNode({
         >
           {areaLine}
         </span>
-        <span className="mt-1.5 block text-xs leading-4 text-muted line-clamp-2">
-          {project.description}
-        </span>
       </button>
       <a
         href={project.url}
@@ -105,6 +102,12 @@ export function ProjectNode({
           →
         </span>
       </a>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-full left-0 z-20 mt-1.5 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-xs leading-4 text-muted opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {project.description}
+      </span>
     </article>
   );
 }
